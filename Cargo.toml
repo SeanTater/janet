@@ -1,0 +1,16 @@
+[package]
+name = "code-assistant"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.97"
+async-trait = "0.1.88"
+bitcode = "0.6.6"
+fjall = "2.7.0"
+ignore = "0.4.23"
+notify = "8.0.0"
+notify-debouncer-mini = "0.6.0"
+tokio = { version = "1.44.1", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
