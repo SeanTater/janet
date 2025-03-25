@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.97"
 async-trait = "0.1.88"
-bitcode = "0.6.6"
+bincode = "2"
 fjall = "2.7.0"
 ignore = "0.4.23"
 notify = "8.0.0"
