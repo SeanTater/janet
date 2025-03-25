@@ -7,7 +7,7 @@ use super::analyzer::AnalyzerTrait;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
-use futures::stream::{self, StreamExt};
+use futures::stream::StreamExt;
 
 struct DirectoryTracker {
     base: PathBuf,
@@ -100,9 +100,6 @@ mod tests {
     #[traced_test]
     #[tokio::test]
     async fn test_listen_with_mock_analyzer() -> Result<()> {
-        // Set a base directory for the test.
-        let base = PathBuf::from("/tmp/test_base");
-
         // Create a channel for file events.
         let (tx, rx) = mpsc::channel(128);
 

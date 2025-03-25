@@ -1,8 +1,6 @@
 use super::file_index::FileIndex;
 use anyhow::Result;
 use async_trait::async_trait;
-use ignore::gitignore;
-use itertools::Itertools;
 use reqwest::Client;
 use std::{
     path::{Path, PathBuf},
