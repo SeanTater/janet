@@ -141,6 +141,7 @@ dependencies = [
  "ignore",
  "notify",
  "notify-debouncer-mini",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",

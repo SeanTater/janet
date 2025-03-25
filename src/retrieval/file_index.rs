@@ -1,11 +1,6 @@
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
 
-use super::analyzer::AnalyzerTrait;
 use anyhow::Result;
-use tokio::sync::mpsc;
 
 #[derive(bincode::Encode, bincode::Decode)]
 struct FileRef {
@@ -85,132 +80,87 @@ impl FileIndex {
     }
 }
 
-struct DirectoryTracker {
-    base: PathBuf,
-    events_tx: mpsc::Sender<PathBuf>,
-    event_watcher: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
-    listener: tokio::task::JoinHandle<Result<()>>,
-}
-
-impl DirectoryTracker {
-    pub async fn open<T: AnalyzerTrait + 'static>(
-        path: Option<&Path>,
-        analyzer: T,
-    ) -> Result<Self> {
-        let base = path.map(PathBuf::from).unwrap_or(".".into());
-        let (events_tx, events_rx) = mpsc::channel(128);
-        let local_tx = events_tx.clone();
-
-        // The listener needs to exist first or the rescan will probably block
-        let listener = tokio::task::spawn(Self::listen(base.clone(), events_rx, analyzer));
-
-        // Enqueue the initial scan before the events
-        Self::rescan(&base, &events_tx).await?;
-
-        // Introduce debouncing to reduce duplicate events
-        // The longer scale is to avoid catching blips during git checkouts
-        let mut event_watcher = notify_debouncer_mini::new_debouncer(
-            Duration::from_secs(5),
-            move |res: notify_debouncer_mini::DebounceEventResult| {
-                // Not sure if eating all errors is the best approach but i'm not sure what the alternative here is,
-                // except maybe to move to pollwatcher
-                for ev in res.ok().into_iter().flatten() {
-                    // This is not safe to call in an async context, but it is not run in async, it's in a different thread.
-                    local_tx
-                        .blocking_send(ev.path)
-                        .expect("Analysis pipeline died while receiving file changes")
-                }
-            },
-        )?;
-
-        event_watcher
-            .watcher()
-            .watch(&base, notify::RecursiveMode::Recursive)?;
-
-        Ok(Self {
-            base,
-            events_tx,
-            event_watcher,
-            listener,
-        })
-    }
-
-    pub async fn rescan(base: &Path, events_tx: &mpsc::Sender<PathBuf>) -> Result<()> {
-        for entry in ignore::Walk::new(base) {
-            let entry = entry?;
-            events_tx.send(entry.into_path()).await?;
-        }
-        Ok(())
-    }
-
-    /// A generic listener method that accepts any analyzer implementing AnalyzerTrait.
-    async fn listen<A: AnalyzerTrait + 'static>(
-        base: PathBuf,
-        mut events_rx: mpsc::Receiver<PathBuf>,
-        analyzer: A,
-    ) -> Result<()> {
-        while let Some(event) = events_rx.recv().await {
-            analyzer.analyze(&base.join(&event)).await?;
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::retrieval::analyzer::MockAnalyzer;
-
     use super::*;
-    use std::path::PathBuf;
-    use std::sync::Arc;
-    use tokio::sync::mpsc;
-    use tokio::time::{sleep, Duration};
+    use anyhow::Result;
+    use tempfile::tempdir;
 
-    /// Test the listener using the MockAnalyzer.
-    #[tokio::test]
-    async fn test_listen_with_mock_analyzer() -> Result<()> {
-        // Set a base directory for the test.
-        let base = PathBuf::from("/tmp/test_base");
+    // A simple test type that can be encoded/decoded using bincode.
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, bincode::Encode, bincode::Decode)]
+    struct TestValue(u32);
 
-        // Create a channel for file events.
-        let (tx, rx) = mpsc::channel(128);
+    /// Test that a new key can be inserted and then updated.
+    #[test]
+    fn test_upsert_insert_and_update() -> Result<()> {
+        // Create a temporary directory for the key-value store.
+        let temp_dir = tempdir()?;
+        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let key = b"test-key";
 
-        // Create a new mock analyzer.
-        let mock_analyzer = MockAnalyzer::new();
-        // Clone the Arc so we can inspect it later.
-        let calls_clone = Arc::clone(&mock_analyzer.calls);
+        // Insert an initial value using upsert.
+        let inserted: Option<TestValue> =
+            index.upsert("TestTable", key, |_| Some(TestValue(42)))?;
+        assert_eq!(inserted, Some(TestValue(42)));
 
-        // Spawn the listener task using the generic listener.
-        let listener = tokio::spawn(DirectoryTracker::listen(base.clone(), rx, mock_analyzer));
+        // Update the value by doubling it.
+        let updated: Option<TestValue> = index.upsert("TestTable", key, |prev| {
+            prev.map(|TestValue(val)| TestValue(val * 2))
+        })?;
+        assert_eq!(updated, Some(TestValue(84)));
 
-        // Send a couple of fake file events.
-        let event1 = PathBuf::from("file1.txt");
-        let event2 = PathBuf::from("subdir/file2.txt");
-        tx.send(event1.clone()).await?;
-        tx.send(event2.clone()).await?;
-        // Close the sender so that the listener loop terminates.
-        drop(tx);
+        // Verify that a subsequent get returns the updated value.
+        let fetched: Option<TestValue> = index.get("TestTable", key)?;
+        assert_eq!(fetched, Some(TestValue(84)));
+        Ok(())
+    }
 
-        // Wait a short while to let the listener process the events.
-        sleep(Duration::from_millis(50)).await;
-        listener.await??;
+    /// Test that a key that does not exist returns None.
+    #[test]
+    fn test_get_non_existent_key() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let key = b"non-existent";
 
-        // Now check that the mock analyzer recorded the calls with full paths.
-        let calls = calls_clone.lock().unwrap();
-        assert_eq!(calls.len(), 2);
-        assert!(
-            calls.contains(&base.join(&event1)),
-            "Expected path {} not found in calls: {:?}",
-            base.join(&event1).display(),
-            *calls
-        );
-        assert!(
-            calls.contains(&base.join(&event2)),
-            "Expected path {} not found in calls: {:?}",
-            base.join(&event2).display(),
-            *calls
-        );
+        let fetched: Option<TestValue> = index.get("TestTable", key)?;
+        assert!(fetched.is_none());
+        Ok(())
+    }
 
+    /// Test that upsert can be used to delete a value by returning None from the merger.
+    #[test]
+    fn test_upsert_deletion() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let key = b"key-to-delete";
+
+        // Insert an initial value.
+        let _ = index.upsert("TestTable", key, |_| Some(TestValue(100)))?;
+        let fetched: Option<TestValue> = index.get("TestTable", key)?;
+        assert_eq!(fetched, Some(TestValue(100)));
+
+        // Now "delete" the key by returning None.
+        let deleted: Option<TestValue> = index.upsert("TestTable", key, |_| None)?;
+        assert!(deleted.is_none());
+
+        // Verify that the key is no longer present.
+        let fetched_after: Option<TestValue> = index.get("TestTable", key)?;
+        assert!(fetched_after.is_none());
+        Ok(())
+    }
+
+    /// Test that using a different table name (for example "FileRef") works correctly.
+    #[test]
+    fn test_file_refs_partition() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let key = b"file1";
+        let value = TestValue(1);
+
+        // Upsert into the "FileRef" partition.
+        let _ = index.upsert("FileRef", key, |_| Some(value))?;
+        let fetched: Option<TestValue> = index.get("FileRef", key)?;
+        assert_eq!(fetched, Some(value));
         Ok(())
     }
 }

@@ -1,8 +1,3 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-    time::Duration,
-};
-
 mod analyzer;
+mod directory_watcher;
 mod file_index;
