@@ -12,22 +12,21 @@ struct FileRef {
     hash: [u8; 32],
 }
 
-struct ChunkRecordV1 {
-    chunk_id: u64,
-    file_hash: [u8; 32],
-    line_start: u32,
-    line_end: u32,
-}
-
+#[derive(Clone)]
 pub struct FileIndex {
+    pub(crate) base: PathBuf,
     keyspace: fjall::TransactionalKeyspace,
 }
 
 impl FileIndex {
-    pub fn open(path: Option<&Path>) -> Result<Self> {
-        let path = path.map(PathBuf::from).unwrap_or(".code-assistant".into());
-        let keyspace = fjall::Config::new(path).open_transactional()?;
-        Ok(Self { keyspace })
+    pub fn open(base: &Path) -> Result<Self> {
+        let assist_dir = base.join(".code-assistant/index");
+        std::fs::create_dir_all(&assist_dir)?;
+        let keyspace = fjall::Config::new(assist_dir).open_transactional()?;
+        Ok(Self {
+            base: base.to_path_buf(),
+            keyspace,
+        })
     }
 
     fn file_refs(&self) -> Result<fjall::TransactionalPartition> {
@@ -95,7 +94,7 @@ mod tests {
     fn test_upsert_insert_and_update() -> Result<()> {
         // Create a temporary directory for the key-value store.
         let temp_dir = tempdir()?;
-        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let index = FileIndex::open(temp_dir.path())?;
         let key = b"test-key";
 
         // Insert an initial value using upsert.
@@ -119,7 +118,7 @@ mod tests {
     #[test]
     fn test_get_non_existent_key() -> Result<()> {
         let temp_dir = tempdir()?;
-        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let index = FileIndex::open(temp_dir.path())?;
         let key = b"non-existent";
 
         let fetched: Option<TestValue> = index.get("TestTable", key)?;
@@ -131,7 +130,7 @@ mod tests {
     #[test]
     fn test_upsert_deletion() -> Result<()> {
         let temp_dir = tempdir()?;
-        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let index = FileIndex::open(temp_dir.path())?;
         let key = b"key-to-delete";
 
         // Insert an initial value.
@@ -153,7 +152,7 @@ mod tests {
     #[test]
     fn test_file_refs_partition() -> Result<()> {
         let temp_dir = tempdir()?;
-        let index = FileIndex::open(Some(temp_dir.path()))?;
+        let index = FileIndex::open(temp_dir.path())?;
         let key = b"file1";
         let value = TestValue(1);
 

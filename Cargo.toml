@@ -7,11 +7,21 @@ edition = "2021"
 anyhow = "1.0.97"
 async-trait = "0.1.88"
 bincode = "2"
+blake3 = "1.7.0"
 fjall = "2.7.0"
+futures = "0.3.31"
 ignore = "0.4.23"
+itertools = "0.14.0"
 notify = "8.0.0"
 notify-debouncer-mini = "0.6.0"
+reqwest = { version = "0.12.15", default-features = false, features = ["http2", "rustls-tls"] }
+serde = { version = "1.0.219", features = ["derive"] }
 tempfile = "3.19.1"
 tokio = { version = "1.44.1", features = ["full"] }
+tokio-stream = "0.1.17"
+toml = "0.8.20"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+
+[dev-dependencies]
+tracing-test = "0.2.5"

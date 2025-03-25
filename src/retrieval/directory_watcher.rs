@@ -7,6 +7,8 @@ use super::analyzer::AnalyzerTrait;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
+use futures::stream::{self, StreamExt};
+
 struct DirectoryTracker {
     base: PathBuf,
     events_tx: mpsc::Sender<PathBuf>,
@@ -24,7 +26,7 @@ impl DirectoryTracker {
         let local_tx = events_tx.clone();
 
         // The listener needs to exist first or the rescan will probably block
-        let listener = tokio::task::spawn(Self::listen(base.clone(), events_rx, analyzer));
+        let listener = tokio::task::spawn(Self::listen(events_rx, analyzer));
 
         // Enqueue the initial scan before the events
         Self::rescan(&base, &events_tx).await?;
@@ -67,13 +69,18 @@ impl DirectoryTracker {
 
     /// A generic listener method that accepts any analyzer implementing AnalyzerTrait.
     async fn listen<A: AnalyzerTrait + 'static>(
-        base: PathBuf,
-        mut events_rx: mpsc::Receiver<PathBuf>,
+        events_rx: mpsc::Receiver<PathBuf>,
         analyzer: A,
     ) -> Result<()> {
-        while let Some(event) = events_rx.recv().await {
-            analyzer.analyze(&base.join(&event)).await?;
-        }
+        let analyzer_ref = &analyzer;
+        let recv_stream = tokio_stream::wrappers::ReceiverStream::new(events_rx);
+        recv_stream
+            .for_each_concurrent(16, |event| async move {
+                analyzer_ref.analyze(&event).await.unwrap_or_else(|err| {
+                    tracing::error!("Failed to analyze path {}: {}", event.display(), err)
+                })
+            })
+            .await;
         Ok(())
     }
 }
@@ -87,8 +94,10 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::mpsc;
     use tokio::time::{sleep, Duration};
+    use tracing_test::traced_test;
 
     /// Test the listener using the MockAnalyzer.
+    #[traced_test]
     #[tokio::test]
     async fn test_listen_with_mock_analyzer() -> Result<()> {
         // Set a base directory for the test.
@@ -103,7 +112,7 @@ mod tests {
         let calls_clone = Arc::clone(&mock_analyzer.calls);
 
         // Spawn the listener task using the generic listener.
-        let listener = tokio::spawn(DirectoryTracker::listen(base.clone(), rx, mock_analyzer));
+        let listener = tokio::spawn(DirectoryTracker::listen(rx, mock_analyzer));
 
         // Send a couple of fake file events.
         let event1 = PathBuf::from("file1.txt");
@@ -121,15 +130,15 @@ mod tests {
         let calls = calls_clone.lock().unwrap();
         assert_eq!(calls.len(), 2);
         assert!(
-            calls.contains(&base.join(&event1)),
+            calls.contains(&event1),
             "Expected path {} not found in calls: {:?}",
-            base.join(&event1).display(),
+            event1.display(),
             *calls
         );
         assert!(
-            calls.contains(&base.join(&event2)),
+            calls.contains(&event2),
             "Expected path {} not found in calls: {:?}",
-            base.join(&event2).display(),
+            event2.display(),
             *calls
         );
 
