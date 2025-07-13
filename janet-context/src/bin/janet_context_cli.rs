@@ -21,7 +21,7 @@ struct Args {
     path: String,
 
     /// Maximum length for each text chunk.
-    #[arg(short, long, default_value_t = 500)]
+    #[arg(short, long, default_value_t = 5000)]
     max_chunk_length: usize,
 
     /// Comma-separated list of regex patterns for delimiters.
@@ -70,6 +70,7 @@ fn main() -> io::Result<()> {
         path: &'a str,
         sequence: usize,
         chunk_text: &'a str,
+        summary: String,
     }
 
     let serializable_chunks: Vec<SerializableTextChunk> = chunks
@@ -79,6 +80,7 @@ fn main() -> io::Result<()> {
             path: c.path,
             sequence: c.sequence,
             chunk_text: c.chunk_text,
+            summary: c.build(),
         })
         .collect();
 
