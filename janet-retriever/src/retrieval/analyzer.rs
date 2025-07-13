@@ -8,7 +8,7 @@ use std::{
 };
 
 #[derive(bincode::Encode, bincode::Decode)]
-struct Chunk {
+pub struct Chunk {
     file_hash: [u8; 32],
     relative_path: PathBuf,
     line_start: usize,
