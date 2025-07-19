@@ -1,0 +1,38 @@
+[package]
+name = "janet-ai-retriever"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0.97"
+async-trait = "0.1.88"
+blake3 = "1.7.0"
+bytemuck = "1.14.0"
+futures = "0.3.31"
+ignore = "0.4.23"
+itertools = "0.14.0"
+notify = "8.0.0"
+notify-debouncer-mini = "0.6.0"
+reqwest = { version = "0.12.15", default-features = false, features = ["http2", "rustls-tls"] }
+serde = { version = "1.0.219", features = ["derive"] }
+# SQLite database with minimal features
+# Note: sqlx always pulls in mysql/postgres crates as dependencies even when features are disabled,
+# causing RUSTSEC-2023-0071 to appear in cargo audit. This is ignored in CI since we only use SQLite.
+# Additional features we might use later:
+# - "derive": FromRow and other derive macros
+# - "macros": Compile-time query verification
+# - "uuid": UUID type support
+# - "json": JSON type support
+# - "any": Runtime database driver switching
+# - "postgres": PostgreSQL support (if needed later)
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "chrono", "migrate"] }
+tempfile = "3.19.1"
+tokio = { version = "1.44.1", features = ["full"] }
+tokio-stream = "0.1.17"
+toml = "0.8.20"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+
+[dev-dependencies]
+tracing-test = "0.2.5"

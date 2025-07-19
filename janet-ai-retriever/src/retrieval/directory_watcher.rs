@@ -9,6 +9,7 @@ use tokio::sync::mpsc;
 
 use futures::stream::StreamExt;
 
+#[allow(dead_code)]
 struct DirectoryTracker {
     base: PathBuf,
     events_tx: mpsc::Sender<PathBuf>,
@@ -17,6 +18,7 @@ struct DirectoryTracker {
 }
 
 impl DirectoryTracker {
+    #[allow(dead_code)]
     pub async fn open<T: AnalyzerTrait + 'static>(
         path: Option<&Path>,
         analyzer: T,
@@ -59,6 +61,7 @@ impl DirectoryTracker {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn rescan(base: &Path, events_tx: &mpsc::Sender<PathBuf>) -> Result<()> {
         for entry in ignore::Walk::new(base) {
             let entry = entry?;
@@ -68,6 +71,7 @@ impl DirectoryTracker {
     }
 
     /// A generic listener method that accepts any analyzer implementing AnalyzerTrait.
+    #[allow(dead_code)]
     async fn listen<A: AnalyzerTrait + 'static>(
         events_rx: mpsc::Receiver<PathBuf>,
         analyzer: A,
@@ -93,7 +97,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use tokio::sync::mpsc;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
     /// Test the listener using the MockAnalyzer.

@@ -1,6 +1,6 @@
 [workspace]
-resolver = "3"
+resolver = "2"
 members = [
-    "janet-retriever",
-    "janet-context",
+    "janet-ai-retriever",
+    "janet-ai-context",
 ]

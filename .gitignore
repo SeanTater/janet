@@ -1,13 +1,54 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage reports
+lcov.info
+coverage/
+cobertura.xml
+
+# Temporary files
+*.tmp
+*.temp
+
+# Project-specific
+.code-assistant/
+audit-results.json
+licenses.json
+
+# Documentation build
+/docs/_build/
+
+# Testing
+.test-*
+test-results/
+
+# Security scan results
+.trufflehog/
+
+# Backup files
+*.bak
+*.backup
+
+# Task runner
 .task
-
-
-# Added by cargo
-
-/target
-
-
-# Added by cargo
-#
-# already existing elements were commented out
-
-#/target

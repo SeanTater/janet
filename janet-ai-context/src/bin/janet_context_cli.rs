@@ -1,10 +1,10 @@
 use clap::Parser;
-use janet_context::text::{DEFAULT_MARKDOWN_DELIMITERS, TextChunk, TextContextBuilder};
+use janet_ai_context::text::{DEFAULT_MARKDOWN_DELIMITERS, TextContextBuilder};
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
 
-/// A CLI tool to chunk text files into JSON output using janet-context.
+/// A CLI tool to chunk text files into JSON output using janet-ai-context.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -85,7 +85,7 @@ fn main() -> io::Result<()> {
         .collect();
 
     let json_output = serde_json::to_string_pretty(&serializable_chunks)?;
-    println!("{}", json_output);
+    println!("{json_output}");
 
     Ok(())
 }

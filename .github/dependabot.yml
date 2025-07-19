@@ -1,0 +1,57 @@
+version: 2
+updates:
+  # Enable version updates for Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "SeanTater"
+    assignees:
+      - "SeanTater"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Group related dependency updates
+    groups:
+      tokio:
+        patterns:
+          - "tokio*"
+      sqlx:
+        patterns:
+          - "sqlx*"
+      serde:
+        patterns:
+          - "serde*"
+      tracing:
+        patterns:
+          - "tracing*"
+      testing:
+        patterns:
+          - "*test*"
+          - "tempfile"
+    # Ignore patch updates for stable dependencies
+    ignore:
+      - dependency-name: "anyhow"
+        update-types: ["version-update:semver-patch"]
+      - dependency-name: "blake3"
+        update-types: ["version-update:semver-patch"]
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "SeanTater"
+    assignees:
+      - "SeanTater"
+    commit-message:
+      prefix: "deps"
+      include: "scope"

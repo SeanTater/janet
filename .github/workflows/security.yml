@@ -1,0 +1,148 @@
+name: Security
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security checks every Monday at 09:00 UTC
+    - cron: '0 9 * * 1'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo-audit binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-audit
+        key: ${{ runner.os }}-cargo-audit-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-audit-bin-
+
+    - name: Install cargo-audit
+      run: |
+        if ! command -v cargo-audit &> /dev/null; then
+          cargo install cargo-audit --locked
+        else
+          echo "cargo-audit already installed, using cached version"
+        fi
+
+    - name: Run security audit
+      run: cargo audit --json --ignore RUSTSEC-2023-0071 | tee audit-results.json
+
+    - name: Upload audit results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-audit-results
+        path: audit-results.json
+
+  dependency-check:
+    name: Dependency License Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo-license binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-license
+        key: ${{ runner.os }}-cargo-license-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-license-bin-
+
+    - name: Install cargo-license
+      run: |
+        if ! command -v cargo-license &> /dev/null; then
+          cargo install cargo-license --locked
+        else
+          echo "cargo-license already installed, using cached version"
+        fi
+
+    - name: Check dependency licenses
+      run: |
+        echo "Checking dependency licenses..."
+        cargo license --json > licenses.json
+
+        # Check for problematic licenses (GPL, AGPL, etc.)
+        if cargo license | grep -E "(GPL|AGPL|LGPL)" && ! cargo license | grep -E "(MIT|Apache|BSD)"; then
+          echo "❌ Found potentially problematic licenses"
+          cargo license
+          exit 1
+        else
+          echo "✅ All licenses appear compatible"
+        fi
+
+    - name: Upload license report
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-licenses
+        path: licenses.json
+
+  supply-chain-security:
+    name: Supply Chain Security
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo-deny binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-deny
+        key: ${{ runner.os }}-cargo-deny-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-deny-bin-
+
+    - name: Install cargo-deny
+      run: |
+        if ! command -v cargo-deny &> /dev/null; then
+          cargo install cargo-deny --locked
+        else
+          echo "cargo-deny already installed, using cached version"
+        fi
+
+
+    - name: Run cargo-deny
+      run: cargo deny check
+
+  secrets-scan:
+    name: Secrets Scanning
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Run TruffleHog OSS
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified

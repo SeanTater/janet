@@ -1,5 +1,7 @@
-use super::{Chunk, ChunkStore, EmbeddingStore, CombinedStore, ChunkFilter, ChunkMetadata, FileHash, ChunkId};
-use crate::retrieval::file_index::{FileIndex, ChunkRef};
+use super::{
+    Chunk, ChunkFilter, ChunkId, ChunkMetadata, ChunkStore, CombinedStore, EmbeddingStore, FileHash,
+};
+use crate::retrieval::file_index::{ChunkRef, FileIndex};
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -46,7 +48,7 @@ impl ChunkStore for SqliteStore {
     async fn insert_chunks(&self, chunks: Vec<Chunk>) -> Result<Vec<ChunkId>> {
         let chunk_refs: Vec<ChunkRef> = chunks.into_iter().map(Self::chunk_to_chunk_ref).collect();
         self.file_index.upsert_chunks(&chunk_refs).await?;
-        
+
         // Since upsert doesn't return IDs, we need to query them back
         // This is a limitation of the current FileIndex API - in a real implementation
         // you'd want to return the IDs from the upsert operation
@@ -55,8 +57,9 @@ impl ChunkStore for SqliteStore {
             // Get chunks for this file and find the matching one
             let file_chunks = self.file_index.get_chunks(&chunk_ref.file_hash).await?;
             for file_chunk in file_chunks {
-                if file_chunk.line_start == chunk_ref.line_start && 
-                   file_chunk.line_end == chunk_ref.line_end {
+                if file_chunk.line_start == chunk_ref.line_start
+                    && file_chunk.line_end == chunk_ref.line_end
+                {
                     if let Some(id) = file_chunk.id {
                         ids.push(id);
                         break;
@@ -84,16 +87,19 @@ impl ChunkStore for SqliteStore {
     async fn list_chunks(&self, filter: ChunkFilter) -> Result<Vec<ChunkMetadata>> {
         if let Some(file_hash) = filter.file_hash {
             let chunks = self.file_index.get_chunks(&file_hash).await?;
-            Ok(chunks.into_iter().filter_map(|chunk| {
-                chunk.id.map(|id| ChunkMetadata {
-                    id,
-                    file_hash: chunk.file_hash,
-                    relative_path: chunk.relative_path,
-                    line_start: chunk.line_start,
-                    line_end: chunk.line_end,
-                    has_embedding: chunk.embedding.is_some(),
+            Ok(chunks
+                .into_iter()
+                .filter_map(|chunk| {
+                    chunk.id.map(|id| ChunkMetadata {
+                        id,
+                        file_hash: chunk.file_hash,
+                        relative_path: chunk.relative_path,
+                        line_start: chunk.line_start,
+                        line_end: chunk.line_end,
+                        has_embedding: chunk.embedding.is_some(),
+                    })
                 })
-            }).collect())
+                .collect())
         } else {
             // Would need to implement a global query in FileIndex
             unimplemented!("Global chunk listing not yet implemented")
@@ -102,36 +108,50 @@ impl ChunkStore for SqliteStore {
 
     async fn get_file_chunks(&self, file_hash: FileHash) -> Result<Vec<Chunk>> {
         let chunk_refs = self.file_index.get_chunks(&file_hash).await?;
-        Ok(chunk_refs.into_iter().map(Self::chunk_ref_to_chunk).collect())
+        Ok(chunk_refs
+            .into_iter()
+            .map(Self::chunk_ref_to_chunk)
+            .collect())
     }
 }
 
 #[async_trait]
 impl EmbeddingStore for SqliteStore {
-    async fn store_embeddings(&self, chunk_ids: Vec<ChunkId>, embeddings: Vec<Vec<f32>>) -> Result<()> {
+    async fn store_embeddings(
+        &self,
+        chunk_ids: Vec<ChunkId>,
+        embeddings: Vec<Vec<f32>>,
+    ) -> Result<()> {
         if chunk_ids.len() != embeddings.len() {
             return Err(anyhow::anyhow!("Chunk IDs and embeddings count mismatch"));
         }
-        
+
         // Update each chunk's embedding
         for (chunk_id, embedding) in chunk_ids.into_iter().zip(embeddings.iter()) {
-            self.file_index.update_chunk_embedding(chunk_id, Some(embedding)).await?;
+            self.file_index
+                .update_chunk_embedding(chunk_id, Some(embedding))
+                .await?;
         }
-        
+
         Ok(())
     }
 
-    async fn search_similar(&self, query: Vec<f32>, limit: usize, threshold: Option<f32>) -> Result<Vec<(ChunkId, f32)>> {
+    async fn search_similar(
+        &self,
+        query: Vec<f32>,
+        limit: usize,
+        threshold: Option<f32>,
+    ) -> Result<Vec<(ChunkId, f32)>> {
         // Get all chunks with embeddings
         let chunks = self.file_index.get_all_chunks_with_embeddings().await?;
-        
+
         // Calculate cosine similarity for each chunk
         let mut similarities: Vec<(ChunkId, f32)> = Vec::new();
-        
+
         for chunk in chunks {
             if let (Some(id), Some(embedding)) = (chunk.id, chunk.embedding) {
                 let similarity = cosine_similarity(&query, &embedding);
-                
+
                 // Apply threshold if provided
                 if let Some(min_threshold) = threshold {
                     if similarity >= min_threshold {
@@ -142,13 +162,13 @@ impl EmbeddingStore for SqliteStore {
                 }
             }
         }
-        
+
         // Sort by similarity score (descending)
         similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
+
         // Apply limit
         similarities.truncate(limit);
-        
+
         Ok(similarities)
     }
 
@@ -167,20 +187,20 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return 0.0;
     }
-    
+
     let mut dot_product = 0.0;
     let mut norm_a = 0.0;
     let mut norm_b = 0.0;
-    
+
     for i in 0..a.len() {
         dot_product += a[i] * b[i];
         norm_a += a[i] * a[i];
         norm_b += b[i] * b[i];
     }
-    
+
     let norm_a = norm_a.sqrt();
     let norm_b = norm_b.sqrt();
-    
+
     if norm_a == 0.0 || norm_b == 0.0 {
         0.0
     } else {
@@ -190,10 +210,15 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 
 #[async_trait]
 impl CombinedStore for SqliteStore {
-    async fn search_chunks(&self, query: Vec<f32>, limit: usize, threshold: Option<f32>) -> Result<Vec<(Chunk, f32)>> {
+    async fn search_chunks(
+        &self,
+        query: Vec<f32>,
+        limit: usize,
+        threshold: Option<f32>,
+    ) -> Result<Vec<(Chunk, f32)>> {
         // Get similar chunk IDs
         let similar_chunks = self.search_similar(query, limit, threshold).await?;
-        
+
         // Fetch full chunk data
         let mut results = Vec::new();
         for (chunk_id, score) in similar_chunks {
@@ -201,7 +226,7 @@ impl CombinedStore for SqliteStore {
                 results.push((chunk, score));
             }
         }
-        
+
         Ok(results)
     }
 }
@@ -218,7 +243,7 @@ mod tests {
         let temp_dir = tempdir()?;
         let file_index = FileIndex::open_memory(temp_dir.path()).await?;
         let store = SqliteStore::new(file_index);
-        
+
         // Insert a test file
         let file_ref = FileRef {
             relative_path: "test.rs".to_string(),
@@ -226,7 +251,7 @@ mod tests {
             hash: [1; 32],
         };
         store.file_index.upsert_file(&file_ref).await?;
-        
+
         // Insert test chunks
         let chunks = vec![
             Chunk {
@@ -248,21 +273,20 @@ mod tests {
                 embedding: None,
             },
         ];
-        
+
         let chunk_ids = store.insert_chunks(chunks).await?;
         assert_eq!(chunk_ids.len(), 2);
-        
+
         // Store embeddings
-        let embeddings = vec![
-            vec![0.1, 0.2, 0.3],
-            vec![0.4, 0.5, 0.6],
-        ];
-        store.store_embeddings(chunk_ids.clone(), embeddings.clone()).await?;
-        
+        let embeddings = vec![vec![0.1, 0.2, 0.3], vec![0.4, 0.5, 0.6]];
+        store
+            .store_embeddings(chunk_ids.clone(), embeddings.clone())
+            .await?;
+
         // Verify embeddings were stored
         let embedding1 = store.get_embedding(chunk_ids[0]).await?;
         assert_eq!(embedding1, Some(vec![0.1, 0.2, 0.3]));
-        
+
         // Test similarity search
         let query = vec![0.15, 0.25, 0.35];
         let results = store.search_similar(query, 10, None).await?;
@@ -270,22 +294,26 @@ mod tests {
         // First result should be the more similar one
         assert_eq!(results[0].0, chunk_ids[0]);
         assert!(results[0].1 > results[1].1);
-        
+
         // Test with threshold
         // First, let's check what the actual similarities are
         let query_for_threshold = vec![0.15, 0.25, 0.35];
-        let all_results = store.search_similar(query_for_threshold.clone(), 10, None).await?;
-        
+        let all_results = store
+            .search_similar(query_for_threshold.clone(), 10, None)
+            .await?;
+
         // Use a threshold that will filter out at least one result
         let threshold = (all_results[0].1 + all_results[1].1) / 2.0; // midpoint between top two
-        let results_with_threshold = store.search_similar(query_for_threshold, 10, Some(threshold)).await?;
+        let results_with_threshold = store
+            .search_similar(query_for_threshold, 10, Some(threshold))
+            .await?;
         assert_eq!(results_with_threshold.len(), 1); // Only one should pass threshold
-        
+
         // Test delete embeddings
         store.delete_embeddings(vec![chunk_ids[0]]).await?;
         let embedding_after_delete = store.get_embedding(chunk_ids[0]).await?;
         assert_eq!(embedding_after_delete, None);
-        
+
         Ok(())
     }
 
@@ -295,28 +323,28 @@ mod tests {
         let a = vec![1.0, 0.0, 0.0];
         let b = vec![1.0, 0.0, 0.0];
         assert_eq!(cosine_similarity(&a, &b), 1.0);
-        
+
         // Test orthogonal vectors
         let a = vec![1.0, 0.0];
         let b = vec![0.0, 1.0];
         assert_eq!(cosine_similarity(&a, &b), 0.0);
-        
+
         // Test opposite vectors
         let a = vec![1.0, 0.0];
         let b = vec![-1.0, 0.0];
         assert_eq!(cosine_similarity(&a, &b), -1.0);
-        
+
         // Test normalized vectors
         let a = vec![0.6, 0.8];
         let b = vec![0.8, 0.6];
         let similarity = cosine_similarity(&a, &b);
         assert!((similarity - 0.96).abs() < 0.01);
-        
+
         // Test zero vectors
         let a = vec![0.0, 0.0];
         let b = vec![1.0, 1.0];
         assert_eq!(cosine_similarity(&a, &b), 0.0);
-        
+
         // Test different length vectors
         let a = vec![1.0, 2.0];
         let b = vec![1.0, 2.0, 3.0];

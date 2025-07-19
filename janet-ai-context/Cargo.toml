@@ -1,7 +1,8 @@
 [package]
-name = "janet-context"
+name = "janet-ai-context"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 regex = "1"
@@ -10,5 +11,5 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [[bin]]
-name = "janet-context-cli"
+name = "janet-ai-context-cli"
 path = "src/bin/janet_context_cli.rs"
