@@ -134,6 +134,8 @@ jobs:
   secrets-scan:
     name: Secrets Scanning
     runs-on: ubuntu-latest
+    # Only run on pull requests and scheduled scans, not on push to main
+    if: github.event_name != 'push'
     steps:
     - uses: actions/checkout@v4
       with:
@@ -143,4 +145,6 @@ jobs:
       uses: trufflesecurity/trufflehog@main
       with:
         path: ./
+        base: ${{ github.event.repository.default_branch }}
+        head: HEAD
         extra_args: --debug --only-verified
