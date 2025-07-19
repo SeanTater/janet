@@ -1,4 +1,4 @@
-use super::file_index::FileIndex;
+use super::file_index::{FileIndex, ChunkRef, FileRef};
 use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
@@ -6,15 +6,6 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-
-#[derive(bincode::Encode, bincode::Decode)]
-pub struct Chunk {
-    file_hash: [u8; 32],
-    relative_path: PathBuf,
-    line_start: usize,
-    line_end: usize,
-    content: String,
-}
 
 #[derive(Debug, serde::Deserialize)]
 pub struct BertChunkConfig {
@@ -48,7 +39,7 @@ impl RemoteBertChunkAnalyzer {
         }
     }
 
-    pub async fn chunk_file(&self, relative_path: &Path) -> Result<Option<Vec<Chunk>>> {
+    pub async fn chunk_file(&self, relative_path: &Path) -> Result<Option<Vec<ChunkRef>>> {
         // Naive implementation of chunking
         let loc = &self.file_index.base.join(relative_path);
         let metadata = tokio::fs::metadata(loc).await?;
@@ -66,18 +57,29 @@ impl RemoteBertChunkAnalyzer {
         let file_hash = *blake3::hash(&buf).as_bytes();
         let buf = String::from_utf8_lossy(&buf);
         let lines = buf.lines().collect::<Vec<_>>();
+        
+        // Store file reference in database
+        let file_ref = FileRef {
+            relative_path: relative_path.to_string_lossy().to_string(),
+            content: buf.as_bytes().to_vec(),
+            hash: file_hash,
+        };
+        self.file_index.upsert_file(&file_ref).await?;
+        
         Ok(Some(
             (0..lines.len())
                 .step_by(self.config.chunk_step_lines)
                 .map(|line_start| {
                     let line_end = (line_start + self.config.chunk_size_lines).min(lines.len());
                     let content = lines[line_start..line_end].join("\n");
-                    Chunk {
+                    ChunkRef {
+                        id: None,
                         file_hash,
+                        relative_path: relative_path.to_string_lossy().to_string(),
                         line_start,
                         line_end,
-                        relative_path: relative_path.to_path_buf(),
                         content,
+                        embedding: None,
                     }
                 })
                 .collect(),
@@ -88,7 +90,23 @@ impl RemoteBertChunkAnalyzer {
 #[async_trait]
 impl AnalyzerTrait for RemoteBertChunkAnalyzer {
     async fn analyze(&self, relative_path: &Path) -> Result<()> {
-        tracing::info!("Would have indexed {}", relative_path.display());
+        tracing::info!("Indexing {}", relative_path.display());
+        
+        // Skip if not a file or if in gitignore
+        let absolute_path = self.file_index.base.join(relative_path);
+        if !absolute_path.is_file() {
+            return Ok(());
+        }
+        
+        // Chunk the file
+        if let Some(chunks) = self.chunk_file(relative_path).await? {
+            // Store chunks in database
+            self.file_index.upsert_chunks(&chunks).await?;
+            tracing::debug!("Stored {} chunks for {}", chunks.len(), relative_path.display());
+        } else {
+            tracing::debug!("Skipped file {} (ignored or too large)", relative_path.display());
+        }
+        
         Ok(())
     }
 }
