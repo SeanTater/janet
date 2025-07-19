@@ -18,7 +18,7 @@
 #   revert:   Reverts a previous commit
 #
 # Scope can be one of the following (optional):
-#   janet-context, janet-retriever, storage, ci, docs
+#   janet-ai-context, janet-ai-retriever, storage, ci, docs
 #
 # Subject line should:
 #   - Use imperative mood ("Add feature" not "Added feature")

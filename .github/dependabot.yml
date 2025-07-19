@@ -13,7 +13,7 @@ updates:
     assignees:
       - "SeanTater"
     commit-message:
-      prefix: "cargo"
+      prefix: "deps"
       include: "scope"
     # Group related dependency updates
     groups:
@@ -53,5 +53,5 @@ updates:
     assignees:
       - "SeanTater"
     commit-message:
-      prefix: "ci"
+      prefix: "deps"
       include: "scope"

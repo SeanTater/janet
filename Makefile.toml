@@ -149,11 +149,11 @@ dependencies = ["ci", "doc", "test-coverage"]
 description = "Check workspace consistency"
 script = '''
 echo "Checking workspace members build independently..."
-cargo check -p janet-context --all-features
-cargo check -p janet-retriever --all-features
+cargo check -p janet-ai-context --all-features
+cargo check -p janet-ai-retriever --all-features
 
 echo "Checking CLI tools build..."
-cargo build --bin janet-context-cli
+cargo build --bin janet-ai-context-cli
 
 echo "Workspace check complete!"
 '''

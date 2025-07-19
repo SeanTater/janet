@@ -65,7 +65,7 @@
 //!     single passage string, primarily for file-level context.
 //!
 //! ```
-//! use janet_context::text::{TextContextBuilder, TextChunk};
+//! use janet_ai_context::text::{TextContextBuilder, TextChunk};
 //!
 //! let repo_name = "my_rust_project".to_string();
 //! let file_path = "src/main.rs".to_string();
@@ -181,7 +181,7 @@ impl TextContextBuilder {
     /// # Examples
     ///
     /// ```
-    /// use janet_context::text::TextContextBuilder;
+    /// use janet_ai_context::text::TextContextBuilder;
     ///
     /// let repo_name = "my_project".to_string();
     /// let file_path = "src/lib.rs".to_string();
@@ -250,7 +250,7 @@ impl TextContextBuilder {
     /// # Examples
     ///
     /// ```
-    /// use janet_context::text::{TextContextBuilder, TextChunk};
+    /// use janet_ai_context::text::{TextContextBuilder, TextChunk};
     ///
     /// let repo_name = "example_repo".to_string();
     /// let file_path = "path/to/example.txt".to_string();
@@ -425,7 +425,7 @@ impl<'builder, 't> TextChunk<'builder, 't> {
     /// # Examples
     ///
     /// ```
-    /// use janet_context::text::{TextContextBuilder, TextChunk};
+    /// use janet_ai_context::text::{TextContextBuilder, TextChunk};
     ///
     /// let repo_name = "my_repo".to_string();
     /// let file_path = "src/utils.rs".to_string();

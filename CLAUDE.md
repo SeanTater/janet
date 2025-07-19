@@ -95,4 +95,6 @@ The project references ChunkHound architecture (see ARCHITECTURE_REFERENCE.md), 
 - Document concisely, but completely
 - Clear code is better than clear docs
 - Write benchmarks and keep track of them, but don't obsess
-- Keep files under 500 lines if possible
+
+## Git Workflow
+- Never commit directly to main. Use conventional commits. Work in feature branches, and create PRs.

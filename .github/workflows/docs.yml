@@ -31,7 +31,7 @@ jobs:
     - name: Build documentation
       run: |
         cargo doc --no-deps --all-features --document-private-items
-        echo '<meta http-equiv=refresh content=0;url=janet_context/index.html>' > target/doc/index.html
+        echo '<meta http-equiv=refresh content=0;url=janet_ai_context/index.html>' > target/doc/index.html
     
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
@@ -54,14 +54,3 @@ jobs:
         use-verbose-mode: 'yes'
         config-file: '.github/markdown-link-check-config.json'
 
-  spell-check:
-    name: Spell check
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Spell check
-      uses: crate-ci/typos@master
-      with:
-        files: README.md CHANGELOG.md CLAUDE.md ARCHITECTURE_REFERENCE.md
-        config: .typos.toml

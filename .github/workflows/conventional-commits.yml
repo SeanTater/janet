@@ -43,8 +43,8 @@ jobs:
           build
           revert
         scopes: |
-          janet-context
-          janet-retriever
+          janet-ai-context
+          janet-ai-retriever
           storage
           ci
           docs

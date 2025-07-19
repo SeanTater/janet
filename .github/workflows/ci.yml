@@ -155,8 +155,8 @@ jobs:
         cargo check --workspace --all-features
         
         # Check that each crate builds independently
-        cargo check -p janet-context --all-features
-        cargo check -p janet-retriever --all-features
+        cargo check -p janet-ai-context --all-features
+        cargo check -p janet-ai-retriever --all-features
         
         # Verify CLI tools work
-        cargo build --bin janet-context-cli
+        cargo build --bin janet-ai-context-cli

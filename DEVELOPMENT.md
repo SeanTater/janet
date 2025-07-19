@@ -56,7 +56,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`
 
-**Scopes**: `janet-context`, `janet-retriever`, `storage`, `ci`, `docs`
+**Scopes**: `janet-ai-context`, `janet-ai-retriever`, `storage`, `ci`, `docs`
 
 Example:
 ```
