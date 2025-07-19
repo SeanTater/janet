@@ -284,7 +284,7 @@ impl FileIndex {
 
     /// Update a chunk's embedding by ID
     pub async fn update_chunk_embedding(&self, id: i64, embedding: Option<&[f32]>) -> Result<()> {
-        let embedding_bytes = embedding.map(|e| bytemuck::cast_slice::<f32, u8>(e));
+        let embedding_bytes = embedding.map(bytemuck::cast_slice::<f32, u8>);
 
         sqlx::query("UPDATE chunks SET embedding = ?1 WHERE id = ?2")
             .bind(embedding_bytes)
@@ -371,10 +371,7 @@ impl FileIndex {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let query = format!(
-            "UPDATE chunks SET embedding = NULL WHERE id IN ({})",
-            placeholders
-        );
+        let query = format!("UPDATE chunks SET embedding = NULL WHERE id IN ({placeholders})");
         let mut query_builder = sqlx::query(&query);
 
         for id in chunk_ids {

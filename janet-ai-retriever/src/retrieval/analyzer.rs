@@ -9,7 +9,9 @@ use std::{
 
 #[derive(Debug, serde::Deserialize)]
 pub struct BertChunkConfig {
+    #[allow(dead_code)]
     api_base: String,
+    #[allow(dead_code)]
     api_key: String,
     chunk_size_lines: usize,
     chunk_step_lines: usize,
@@ -24,6 +26,7 @@ pub trait AnalyzerTrait: Send + Sync {
 /// The original Analyzer implementing the trait.
 pub struct RemoteBertChunkAnalyzer {
     file_index: FileIndex,
+    #[allow(dead_code)]
     client: reqwest::Client,
     config: BertChunkConfig,
     gitignore: ignore::gitignore::Gitignore,
@@ -122,6 +125,12 @@ impl AnalyzerTrait for RemoteBertChunkAnalyzer {
 /// It records every path passed to `analyze` in an internal vector.
 pub struct MockAnalyzer {
     pub calls: Arc<Mutex<Vec<PathBuf>>>,
+}
+
+impl Default for MockAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockAnalyzer {

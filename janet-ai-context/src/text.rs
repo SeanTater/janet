@@ -341,6 +341,7 @@ impl TextContextBuilder {
     // It returns a vector of byte ranges (slices of the original text) that represent
     // "atomic" segments that cannot be further split by the current delimiter without
     // exceeding the max_chunk_size, or are the delimiters themselves.
+    #[allow(clippy::only_used_in_recursion)]
     fn split_recursively_into_segments(
         &self,
         text: &str,

@@ -1,5 +1,5 @@
 use clap::Parser;
-use janet_ai_context::text::{DEFAULT_MARKDOWN_DELIMITERS, TextChunk, TextContextBuilder};
+use janet_ai_context::text::{DEFAULT_MARKDOWN_DELIMITERS, TextContextBuilder};
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
@@ -85,7 +85,7 @@ fn main() -> io::Result<()> {
         .collect();
 
     let json_output = serde_json::to_string_pretty(&serializable_chunks)?;
-    println!("{}", json_output);
+    println!("{json_output}");
 
     Ok(())
 }
