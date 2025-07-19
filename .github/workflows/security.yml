@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -30,13 +30,13 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
-    
+
     - name: Install cargo-audit
       run: cargo install cargo-audit --locked
-    
+
     - name: Run security audit
-      run: cargo audit --json | tee audit-results.json
-    
+      run: cargo audit --json --ignore RUSTSEC-2023-0071 | tee audit-results.json
+
     - name: Upload audit results
       uses: actions/upload-artifact@v4
       if: always()
@@ -49,18 +49,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    
+
     - name: Install cargo-license
       run: cargo install cargo-license --locked
-    
+
     - name: Check dependency licenses
       run: |
         echo "Checking dependency licenses..."
         cargo license --json > licenses.json
-        
+
         # Check for problematic licenses (GPL, AGPL, etc.)
         if cargo license | grep -E "(GPL|AGPL|LGPL)" && ! cargo license | grep -E "(MIT|Apache|BSD)"; then
           echo "❌ Found potentially problematic licenses"
@@ -69,7 +69,7 @@ jobs:
         else
           echo "✅ All licenses appear compatible"
         fi
-    
+
     - name: Upload license report
       uses: actions/upload-artifact@v4
       with:
@@ -81,13 +81,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    
+
     - name: Install cargo-deny
       run: cargo install cargo-deny --locked
-    
+
     - name: Create cargo-deny config
       run: |
         cat > deny.toml << EOF
@@ -99,7 +99,7 @@ jobs:
             { triple = "x86_64-apple-darwin" },
             { triple = "aarch64-apple-darwin" },
         ]
-        
+
         [advisories]
         db-path = "~/.cargo/advisory-db"
         db-urls = ["https://github.com/rustsec/advisory-db"]
@@ -107,8 +107,10 @@ jobs:
         unmaintained = "warn"
         yanked = "deny"
         notice = "warn"
-        ignore = []
-        
+        ignore = [
+            "RUSTSEC-2023-0071", # RSA crate vulnerability in sqlx-mysql (we only use SQLite)
+        ]
+
         [licenses]
         unlicensed = "deny"
         allow = [
@@ -131,7 +133,7 @@ jobs:
         default = "deny"
         confidence-threshold = 0.8
         exceptions = []
-        
+
         [bans]
         multiple-versions = "warn"
         wildcards = "allow"
@@ -146,14 +148,14 @@ jobs:
         ]
         skip = []
         skip-tree = []
-        
+
         [sources]
         unknown-registry = "warn"
         unknown-git = "warn"
         allow-registry = ["https://github.com/rust-lang/crates.io-index"]
         allow-git = []
         EOF
-    
+
     - name: Run cargo-deny
       run: cargo deny check
 
@@ -164,7 +166,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
     - name: Run TruffleHog OSS
       uses: trufflesecurity/trufflehog@main
       with:

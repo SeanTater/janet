@@ -88,7 +88,7 @@ The project references ChunkHound architecture (see ARCHITECTURE_REFERENCE.md), 
 ## Development Philosophy
 - Use tracing rather than log
 - Use "sans io" (separate io operations from pure functions) when possible to keep things easy to test
-- Lean into a local-first policy: 
+- Lean into a local-first policy:
   - Prefer sqlite over pinecone
   - Prefer ollama/llamacpp over openai/anthropic
   - Prefer bundled solutions over separate when feasible (like a rust library rather than a python dependency or separate API)
@@ -98,3 +98,4 @@ The project references ChunkHound architecture (see ARCHITECTURE_REFERENCE.md), 
 
 ## Git Workflow
 - Never commit directly to main. Use conventional commits. Work in feature branches, and create PRs.
+- Commit and push (to a feature branch and PR) whenever you feel the code is generally functional and tests are green.
