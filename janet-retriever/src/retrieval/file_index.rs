@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use anyhow::Result;
-use sqlx::{SqlitePool, Row};
+use sqlx::{Row, SqlitePool};
+use std::path::{Path, PathBuf};
 
 /// Represents a file in the database
 #[derive(Debug, Clone)]
@@ -35,10 +35,10 @@ impl FileIndex {
     pub async fn open(base: &Path) -> Result<Self> {
         let assist_dir = base.join(".code-assistant");
         std::fs::create_dir_all(&assist_dir)?;
-        
+
         let db_path = assist_dir.join("index.db");
         let database_url = format!("sqlite:{}", db_path.display());
-        
+
         let pool = SqlitePool::connect(&database_url).await?;
         Self::new_with_pool(base, pool).await
     }
@@ -50,20 +50,23 @@ impl FileIndex {
     }
 
     async fn new_with_pool(base: &Path, pool: SqlitePool) -> Result<Self> {
-        
         // Configure SQLite for concurrency
         sqlx::query("PRAGMA journal_mode = WAL")
-            .execute(&pool).await?;
+            .execute(&pool)
+            .await?;
         sqlx::query("PRAGMA busy_timeout = 5000")
-            .execute(&pool).await?;
+            .execute(&pool)
+            .await?;
         sqlx::query("PRAGMA synchronous = NORMAL")
-            .execute(&pool).await?;
+            .execute(&pool)
+            .await?;
         sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&pool).await?;
-        
+            .execute(&pool)
+            .await?;
+
         // Create tables directly
         Self::create_tables(&pool).await?;
-        
+
         Ok(Self {
             base: base.to_path_buf(),
             pool,
@@ -81,8 +84,10 @@ impl FileIndex {
                 modified_at TIMESTAMP NOT NULL,
                 indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            "#
-        ).execute(pool).await?;
+            "#,
+        )
+        .execute(pool)
+        .await?;
 
         // Create chunks table
         sqlx::query(
@@ -99,18 +104,24 @@ impl FileIndex {
                 CONSTRAINT unique_chunk UNIQUE(file_hash, line_start, line_end),
                 FOREIGN KEY (file_hash) REFERENCES files(hash) ON DELETE CASCADE
             )
-            "#
-        ).execute(pool).await?;
+            "#,
+        )
+        .execute(pool)
+        .await?;
 
         // Create indexes
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_chunks_file_hash ON chunks(file_hash)")
-            .execute(pool).await?;
+            .execute(pool)
+            .await?;
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_chunks_path ON chunks(relative_path)")
-            .execute(pool).await?;
+            .execute(pool)
+            .await?;
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_files_path ON files(relative_path)")
-            .execute(pool).await?;
+            .execute(pool)
+            .await?;
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_files_modified ON files(modified_at)")
-            .execute(pool).await?;
+            .execute(pool)
+            .await?;
 
         Ok(())
     }
@@ -159,10 +170,13 @@ impl FileIndex {
     /// Insert or update chunks for a file
     pub async fn upsert_chunks(&self, chunks: &[ChunkRef]) -> Result<()> {
         let mut tx = self.pool.begin().await?;
-        
+
         for chunk in chunks {
-            let embedding_bytes = chunk.embedding.as_ref().map(|e| bytemuck::cast_slice::<f32, u8>(e));
-            
+            let embedding_bytes = chunk
+                .embedding
+                .as_ref()
+                .map(|e| bytemuck::cast_slice::<f32, u8>(e));
+
             sqlx::query(
                 r#"
                 INSERT INTO chunks (file_hash, relative_path, line_start, line_end, content, embedding)
@@ -182,7 +196,7 @@ impl FileIndex {
             .execute(&mut *tx)
             .await?;
         }
-        
+
         tx.commit().await?;
         Ok(())
     }
@@ -204,10 +218,9 @@ impl FileIndex {
             let line_end: i64 = row.get("line_end");
             let content: String = row.get("content");
             let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
-            
-            let embedding = embedding_bytes.map(|bytes| {
-                bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
-            });
+
+            let embedding =
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
 
             chunks.push(ChunkRef {
                 id: Some(id),
@@ -248,13 +261,12 @@ impl FileIndex {
             let line_end: i64 = row.get("line_end");
             let content: String = row.get("content");
             let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
-            
+
             let mut file_hash = [0u8; 32];
             file_hash.copy_from_slice(&file_hash_bytes[..32]);
-            
-            let embedding = embedding_bytes.map(|bytes| {
-                bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
-            });
+
+            let embedding =
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
 
             Ok(Some(ChunkRef {
                 id: Some(id),
@@ -273,13 +285,13 @@ impl FileIndex {
     /// Update a chunk's embedding by ID
     pub async fn update_chunk_embedding(&self, id: i64, embedding: Option<&[f32]>) -> Result<()> {
         let embedding_bytes = embedding.map(|e| bytemuck::cast_slice::<f32, u8>(e));
-        
+
         sqlx::query("UPDATE chunks SET embedding = ?1 WHERE id = ?2")
             .bind(embedding_bytes)
             .bind(id)
             .execute(&self.pool)
             .await?;
-        
+
         Ok(())
     }
 
@@ -287,7 +299,7 @@ impl FileIndex {
     pub async fn get_all_chunks_with_embeddings(&self) -> Result<Vec<ChunkRef>> {
         let rows = sqlx::query(
             "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
-             FROM chunks WHERE embedding IS NOT NULL"
+             FROM chunks WHERE embedding IS NOT NULL",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -301,13 +313,12 @@ impl FileIndex {
             let line_end: i64 = row.get("line_end");
             let content: String = row.get("content");
             let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
-            
+
             let mut file_hash = [0u8; 32];
             file_hash.copy_from_slice(&file_hash_bytes[..32]);
-            
-            let embedding = embedding_bytes.map(|bytes| {
-                bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
-            });
+
+            let embedding =
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
 
             chunks.push(ChunkRef {
                 id: Some(id),
@@ -324,11 +335,14 @@ impl FileIndex {
 
     /// Update chunk by ID
     pub async fn update_chunk_by_id(&self, id: i64, chunk: &ChunkRef) -> Result<()> {
-        let embedding_bytes = chunk.embedding.as_ref().map(|e| bytemuck::cast_slice::<f32, u8>(e));
-        
+        let embedding_bytes = chunk
+            .embedding
+            .as_ref()
+            .map(|e| bytemuck::cast_slice::<f32, u8>(e));
+
         sqlx::query(
             "UPDATE chunks SET file_hash = ?1, relative_path = ?2, line_start = ?3, 
-             line_end = ?4, content = ?5, embedding = ?6 WHERE id = ?7"
+             line_end = ?4, content = ?5, embedding = ?6 WHERE id = ?7",
         )
         .bind(&chunk.file_hash[..])
         .bind(&chunk.relative_path)
@@ -339,7 +353,7 @@ impl FileIndex {
         .bind(id)
         .execute(&self.pool)
         .await?;
-        
+
         Ok(())
     }
 
@@ -350,19 +364,23 @@ impl FileIndex {
         }
 
         // Build a query with placeholders
-        let placeholders = chunk_ids.iter()
+        let placeholders = chunk_ids
+            .iter()
             .enumerate()
             .map(|(i, _)| format!("?{}", i + 1))
             .collect::<Vec<_>>()
             .join(", ");
-        
-        let query = format!("UPDATE chunks SET embedding = NULL WHERE id IN ({})", placeholders);
+
+        let query = format!(
+            "UPDATE chunks SET embedding = NULL WHERE id IN ({})",
+            placeholders
+        );
         let mut query_builder = sqlx::query(&query);
-        
+
         for id in chunk_ids {
             query_builder = query_builder.bind(id);
         }
-        
+
         query_builder.execute(&self.pool).await?;
         Ok(())
     }
@@ -396,7 +414,7 @@ mod tests {
     async fn test_file_operations() -> Result<()> {
         let temp_dir = tempdir()?;
         let index = FileIndex::open_memory(temp_dir.path()).await?;
-        
+
         let file_ref = FileRef {
             relative_path: "test/file.rs".to_string(),
             content: b"fn main() {}\n".to_vec(),
@@ -421,7 +439,7 @@ mod tests {
     async fn test_chunk_operations() -> Result<()> {
         let temp_dir = tempdir()?;
         let index = FileIndex::open_memory(temp_dir.path()).await?;
-        
+
         // First insert a file
         let file_ref = FileRef {
             relative_path: "test/file.rs".to_string(),
@@ -461,7 +479,10 @@ mod tests {
         assert_eq!(fetched_chunks[0].content, "fn main() {}");
         assert_eq!(fetched_chunks[1].content, "fn test() {}");
         assert!(fetched_chunks[0].embedding.is_some());
-        assert_eq!(fetched_chunks[0].embedding.as_ref().unwrap(), &vec![0.1, 0.2, 0.3]);
+        assert_eq!(
+            fetched_chunks[0].embedding.as_ref().unwrap(),
+            &vec![0.1, 0.2, 0.3]
+        );
 
         Ok(())
     }
@@ -471,7 +492,7 @@ mod tests {
     async fn test_chunk_deletion() -> Result<()> {
         let temp_dir = tempdir()?;
         let index = FileIndex::open_memory(temp_dir.path()).await?;
-        
+
         // Insert file and chunks
         let file_ref = FileRef {
             relative_path: "test/file.rs".to_string(),

@@ -1,0 +1,159 @@
+[config]
+default_to_workspace = false
+
+# Development tasks
+[tasks.check]
+description = "Run all checks (format, clippy, tests)"
+dependencies = ["format-check", "clippy", "test"]
+
+[tasks.fix]
+description = "Fix all auto-fixable issues"
+dependencies = ["format", "clippy-fix"]
+
+[tasks.format]
+description = "Format code"
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.format-check]
+description = "Check code formatting"
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+[tasks.clippy]
+description = "Run clippy lints"
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
+[tasks.clippy-fix]
+description = "Run clippy with auto-fix"
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--fix", "--allow-dirty", "--allow-staged"]
+
+[tasks.test]
+description = "Run tests"
+command = "cargo"
+args = ["test", "--all-features"]
+
+[tasks.test-coverage]
+description = "Run tests with coverage"
+install_crate = "cargo-llvm-cov"
+command = "cargo"
+args = ["llvm-cov", "--all-features", "--workspace", "--lcov", "--output-path", "lcov.info"]
+
+[tasks.audit]
+description = "Run security audit"
+install_crate = "cargo-audit"
+command = "cargo"
+args = ["audit"]
+
+[tasks.deny]
+description = "Run cargo-deny checks"
+install_crate = "cargo-deny"
+command = "cargo"
+args = ["deny", "check"]
+
+[tasks.doc]
+description = "Build documentation"
+command = "cargo"
+args = ["doc", "--no-deps", "--all-features", "--document-private-items"]
+
+[tasks.doc-open]
+description = "Build and open documentation"
+command = "cargo"
+args = ["doc", "--no-deps", "--all-features", "--document-private-items", "--open"]
+
+# Build tasks
+[tasks.build]
+description = "Build all crates"
+command = "cargo"
+args = ["build", "--all-features"]
+
+[tasks.build-release]
+description = "Build release binaries"
+command = "cargo"
+args = ["build", "--release", "--all-features"]
+
+# Installation tasks
+[tasks.install-tools]
+description = "Install development tools"
+dependencies = [
+    "install-cargo-audit",
+    "install-cargo-deny", 
+    "install-cargo-llvm-cov",
+    "install-cargo-make"
+]
+
+[tasks.install-cargo-audit]
+install_crate = "cargo-audit"
+
+[tasks.install-cargo-deny]
+install_crate = "cargo-deny"
+
+[tasks.install-cargo-llvm-cov]
+install_crate = "cargo-llvm-cov"
+
+[tasks.install-cargo-make]
+install_crate = "cargo-make"
+
+# Maintenance tasks
+[tasks.update]
+description = "Update dependencies"
+command = "cargo"
+args = ["update"]
+
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.outdated]
+description = "Check for outdated dependencies"
+install_crate = "cargo-outdated"
+command = "cargo"
+args = ["outdated"]
+
+# Git setup
+[tasks.git-setup]
+description = "Set up git hooks and configuration"
+script = '''
+# Set up commit message template
+git config commit.template .gitmessage
+
+# Set up core editor if not set
+if [ -z "$(git config core.editor)" ]; then
+    git config core.editor "code --wait"
+fi
+
+echo "Git configuration updated!"
+echo "Commit message template: .gitmessage"
+echo "Use 'git commit' to use the template"
+'''
+
+# CI simulation
+[tasks.ci]
+description = "Run CI checks locally"
+dependencies = ["format-check", "clippy", "test", "audit", "deny"]
+
+[tasks.pre-commit]
+description = "Run pre-commit checks"
+dependencies = ["format", "clippy-fix", "test"]
+
+# Release preparation
+[tasks.release-prep]
+description = "Prepare for release"
+dependencies = ["ci", "doc", "test-coverage"]
+
+# Workspace-specific tasks
+[tasks.check-workspace]
+description = "Check workspace consistency"
+script = '''
+echo "Checking workspace members build independently..."
+cargo check -p janet-context --all-features
+cargo check -p janet-retriever --all-features
+
+echo "Checking CLI tools build..."
+cargo build --bin janet-context-cli
+
+echo "Workspace check complete!"
+'''

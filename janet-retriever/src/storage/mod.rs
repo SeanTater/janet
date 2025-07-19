@@ -50,19 +50,19 @@ pub struct ChunkMetadata {
 pub trait ChunkStore: Send + Sync {
     /// Insert new chunks and return their IDs
     async fn insert_chunks(&self, chunks: Vec<Chunk>) -> Result<Vec<ChunkId>>;
-    
+
     /// Get a specific chunk by ID
     async fn get_chunk(&self, id: ChunkId) -> Result<Option<Chunk>>;
-    
+
     /// Update an existing chunk
     async fn update_chunk(&self, id: ChunkId, chunk: Chunk) -> Result<()>;
-    
+
     /// Delete chunks for a specific file
     async fn delete_chunks(&self, file_hash: FileHash) -> Result<usize>;
-    
+
     /// List chunks matching filter criteria
     async fn list_chunks(&self, filter: ChunkFilter) -> Result<Vec<ChunkMetadata>>;
-    
+
     /// Get all chunks for a file
     async fn get_file_chunks(&self, file_hash: FileHash) -> Result<Vec<Chunk>>;
 }
@@ -71,14 +71,23 @@ pub trait ChunkStore: Send + Sync {
 #[async_trait]
 pub trait EmbeddingStore: Send + Sync {
     /// Store embeddings for chunks
-    async fn store_embeddings(&self, chunk_ids: Vec<ChunkId>, embeddings: Vec<Vec<f32>>) -> Result<()>;
-    
+    async fn store_embeddings(
+        &self,
+        chunk_ids: Vec<ChunkId>,
+        embeddings: Vec<Vec<f32>>,
+    ) -> Result<()>;
+
     /// Search for similar chunks using vector similarity
-    async fn search_similar(&self, query: Vec<f32>, limit: usize, threshold: Option<f32>) -> Result<Vec<(ChunkId, f32)>>;
-    
+    async fn search_similar(
+        &self,
+        query: Vec<f32>,
+        limit: usize,
+        threshold: Option<f32>,
+    ) -> Result<Vec<(ChunkId, f32)>>;
+
     /// Delete embeddings for specific chunks
     async fn delete_embeddings(&self, chunk_ids: Vec<ChunkId>) -> Result<()>;
-    
+
     /// Get embedding for a specific chunk
     async fn get_embedding(&self, chunk_id: ChunkId) -> Result<Option<Vec<f32>>>;
 }
@@ -87,5 +96,10 @@ pub trait EmbeddingStore: Send + Sync {
 #[async_trait]
 pub trait CombinedStore: ChunkStore + EmbeddingStore + Send + Sync {
     /// Search for similar chunks and return full chunk data
-    async fn search_chunks(&self, query: Vec<f32>, limit: usize, threshold: Option<f32>) -> Result<Vec<(Chunk, f32)>>;
+    async fn search_chunks(
+        &self,
+        query: Vec<f32>,
+        limit: usize,
+        threshold: Option<f32>,
+    ) -> Result<Vec<(Chunk, f32)>>;
 }

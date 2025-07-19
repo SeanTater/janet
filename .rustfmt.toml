@@ -1,0 +1,26 @@
+# Rust formatting configuration (stable-compatible)
+# Based on project philosophy: "Clear code is better than clear docs"
+
+# Edition and basic settings
+edition = "2021"
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+
+# Import settings
+reorder_imports = true
+
+# String and array formatting
+array_width = 60
+chain_width = 60
+
+# Line ending and whitespace
+newline_style = "Unix"
+remove_nested_parens = true
+use_small_heuristics = "Default"
+
+# Match block formatting
+match_block_trailing_comma = false
+
+# Use field shorthand when possible
+use_field_init_shorthand = true

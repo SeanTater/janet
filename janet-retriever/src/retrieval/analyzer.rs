@@ -1,4 +1,4 @@
-use super::file_index::{FileIndex, ChunkRef, FileRef};
+use super::file_index::{ChunkRef, FileIndex, FileRef};
 use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
@@ -57,7 +57,7 @@ impl RemoteBertChunkAnalyzer {
         let file_hash = *blake3::hash(&buf).as_bytes();
         let buf = String::from_utf8_lossy(&buf);
         let lines = buf.lines().collect::<Vec<_>>();
-        
+
         // Store file reference in database
         let file_ref = FileRef {
             relative_path: relative_path.to_string_lossy().to_string(),
@@ -65,7 +65,7 @@ impl RemoteBertChunkAnalyzer {
             hash: file_hash,
         };
         self.file_index.upsert_file(&file_ref).await?;
-        
+
         Ok(Some(
             (0..lines.len())
                 .step_by(self.config.chunk_step_lines)
@@ -91,22 +91,29 @@ impl RemoteBertChunkAnalyzer {
 impl AnalyzerTrait for RemoteBertChunkAnalyzer {
     async fn analyze(&self, relative_path: &Path) -> Result<()> {
         tracing::info!("Indexing {}", relative_path.display());
-        
+
         // Skip if not a file or if in gitignore
         let absolute_path = self.file_index.base.join(relative_path);
         if !absolute_path.is_file() {
             return Ok(());
         }
-        
+
         // Chunk the file
         if let Some(chunks) = self.chunk_file(relative_path).await? {
             // Store chunks in database
             self.file_index.upsert_chunks(&chunks).await?;
-            tracing::debug!("Stored {} chunks for {}", chunks.len(), relative_path.display());
+            tracing::debug!(
+                "Stored {} chunks for {}",
+                chunks.len(),
+                relative_path.display()
+            );
         } else {
-            tracing::debug!("Skipped file {} (ignored or too large)", relative_path.display());
+            tracing::debug!(
+                "Skipped file {} (ignored or too large)",
+                relative_path.display()
+            );
         }
-        
+
         Ok(())
     }
 }

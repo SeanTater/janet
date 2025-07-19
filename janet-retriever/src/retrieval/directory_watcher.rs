@@ -93,7 +93,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use tokio::sync::mpsc;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
     /// Test the listener using the MockAnalyzer.
