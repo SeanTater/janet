@@ -140,7 +140,7 @@ jobs:
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
 
-  workspace-hack-check:
+  workspace-check:
     name: Workspace dependency check
     runs-on: ubuntu-latest
     steps:
@@ -148,6 +148,15 @@ jobs:
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-workspace-${{ hashFiles('**/Cargo.lock') }}
     
     - name: Check workspace dependencies
       run: |

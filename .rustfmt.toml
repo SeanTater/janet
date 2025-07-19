@@ -1,2 +1,2 @@
 # Use rustfmt defaults with minimal customization
-edition = "2021"
+edition = "2024"

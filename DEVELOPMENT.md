@@ -1,46 +1,68 @@
 # Development Guide
 
-This document outlines the development workflow, CI/CD setup, and best practices for the Janet project.
+This document outlines the development workflow and best practices for the Janet AI project.
 
 ## Quick Start
 
-1. **Install development tools**:
-   ```bash
-   cargo install cargo-make
-   cargo make install-tools
-   ```
+```bash
+# Install uv (fast Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-2. **Set up git configuration**:
-   ```bash
-   cargo make git-setup
-   ```
+# Set up pre-commit hooks
+uv tool install pre-commit
+pre-commit install
+pre-commit install --hook-type commit-msg
 
-3. **Run all checks locally**:
-   ```bash
-   cargo make ci
-   ```
+# Verify everything works
+cargo test
+cargo clippy
+cargo fmt --check
+```
 
 ## Development Workflow
 
-### Daily Development
+### Essential Commands
 
 ```bash
-# Check code quality before committing
-cargo make pre-commit
+# Format code
+cargo fmt
 
-# Run all CI checks locally
-cargo make ci
+# Check code quality
+cargo clippy --all-targets --all-features -- -D warnings
 
-# Build documentation and open in browser
-cargo make doc-open
+# Run tests
+cargo test
+
+# Build project
+cargo build
+
+# Run individual crate tests
+cargo test -p janet-ai-context
+cargo test -p janet-ai-retriever
+
+# Build release binaries
+cargo build --release
 ```
 
-### Code Quality
+### Pre-commit Hooks
 
-- **Formatting**: We use `rustfmt` with custom configuration (`.rustfmt.toml`)
-- **Linting**: Enforced via `clippy` with strict settings (`.clippy.toml`)
-- **Testing**: All code must have tests; aim for high coverage
-- **Documentation**: Public APIs must be documented
+Pre-commit hooks automatically run on every commit to ensure code quality:
+
+- **Format checking**: `cargo fmt --check`
+- **Linting**: `cargo clippy` with warnings as errors
+- **File cleanup**: Remove trailing whitespace, ensure final newlines
+- **Config validation**: Check YAML and TOML syntax
+- **Conventional commits**: Enforce commit message format
+
+If pre-commit fails, fix the issues and commit again. Most formatting issues can be auto-fixed:
+
+```bash
+# Auto-fix formatting
+cargo fmt
+
+# Auto-fix some clippy issues
+cargo clippy --fix --allow-dirty --allow-staged
+```
 
 ### Commit Guidelines
 
@@ -72,225 +94,98 @@ Closes #123
 
 ### GitHub Actions Workflows
 
-#### 1. **CI Workflow** (`.github/workflows/ci.yml`)
-Runs on every push and PR to main:
+The CI pipeline runs on every push and PR:
 
 - **Multi-platform testing**: Linux, macOS, Windows
 - **Multiple Rust versions**: stable, beta, MSRV (1.70.0)
-- **Comprehensive checks**:
-  - `cargo build --all-features`
-  - `cargo test --all-features`
-  - `cargo clippy -- -D warnings`
-  - `cargo fmt --check`
-  - `cargo doc --no-deps`
-- **Code coverage**: Using `cargo-llvm-cov` with Codecov integration
-- **Security audit**: `cargo audit` for vulnerability scanning
-- **Workspace validation**: Ensures all crates build independently
+- **Code quality checks**: format, clippy, tests
+- **Security scanning**: cargo audit, dependency licenses
+- **Documentation**: API docs deployed to GitHub Pages
 
-#### 2. **Release Workflow** (`.github/workflows/release.yml`)
-Triggered on version tags (`v*.*.*`):
+### Release Process
 
-- **Multi-platform binaries**: Creates optimized release builds
-- **GitHub Releases**: Automatic release notes and asset uploads
-- **Crates.io publishing**: Publishes both `janet-context` and `janet-retriever`
-- **Asset packaging**: `.tar.gz` for Unix, `.zip` for Windows
+1. Update version numbers in `Cargo.toml` files
+2. Update `CHANGELOG.md` with new features and fixes
+3. Create release PR with version bump
+4. Merge to main after approval
+5. Create git tag in format `v1.2.3`
+6. GitHub Actions handles the rest automatically:
+   - Builds cross-platform binaries
+   - Creates GitHub release
+   - Publishes to crates.io
 
-#### 3. **Security Workflow** (`.github/workflows/security.yml`)
-Runs weekly and on every push:
+## Project Structure
 
-- **Vulnerability scanning**: `cargo audit` and `cargo deny`
-- **License compliance**: Checks for compatible licenses only
-- **Supply chain security**: Validates dependency sources
-- **Secret scanning**: TruffleHog integration
-
-#### 4. **Documentation Workflow** (`.github/workflows/docs.yml`)
-Maintains project documentation:
-
-- **API docs**: Built with `cargo doc` and deployed to GitHub Pages
-- **Link checking**: Validates all markdown links
-- **Spell checking**: Using `typos` for technical documents
-
-#### 5. **Conventional Commits** (`.github/workflows/conventional-commits.yml`)
-Enforces commit message standards:
-
-- **Commit format validation**: Ensures conventional commit format
-- **PR title checking**: Validates pull request titles
-- **Scope validation**: Enforces allowed scopes
-
-### Dependabot Configuration
-
-Automated dependency updates (`.github/dependabot.yml`):
-
-- **Weekly updates**: Monday 09:00 UTC
-- **Grouped updates**: Related dependencies updated together
-- **Cargo and GitHub Actions**: Both ecosystems covered
-- **Review assignment**: Automatically assigns maintainers
+```
+janet-ai/
+├── janet-ai-context/           # Text chunking library
+│   ├── src/
+│   │   ├── bin/janet_context_cli.rs  # CLI tool
+│   │   └── text.rs             # Core chunking logic
+│   └── Cargo.toml
+├── janet-ai-retriever/         # Storage and retrieval system
+│   ├── src/
+│   │   ├── storage/            # SQLite-based storage
+│   │   └── retrieval/          # File indexing and analysis
+│   └── Cargo.toml
+└── .github/workflows/          # CI/CD pipelines
+```
 
 ## Security Practices
 
-### Dependency Management
-
-- **License compliance**: Only MIT, Apache-2.0, BSD licenses allowed
-- **Vulnerability scanning**: Automated via `cargo audit`
-- **Supply chain validation**: `cargo deny` checks sources and versions
-- **Regular updates**: Dependabot keeps dependencies current
-
-### Secret Management
-
 - **No secrets in code**: Use environment variables
-- **Secret scanning**: TruffleHog prevents accidental commits
-- **Minimal permissions**: CI uses least-privilege access
-
-### Security Audits
-
-- **Weekly scans**: Automated vulnerability checks
-- **RUSTSEC advisories**: Real-time security advisory monitoring
-- **Dependency validation**: Source and license verification
-
-## Local Development Setup
-
-### Required Tools
-
-Install these tools for full local development:
-
-```bash
-# Essential tools
-cargo install cargo-make
-cargo install cargo-audit
-cargo install cargo-deny
-cargo install cargo-llvm-cov
-
-# Optional but recommended
-cargo install cargo-outdated
-cargo install cargo-license
-```
-
-### Pre-commit Hooks
-
-Set up git hooks for automatic quality checks:
-
-```bash
-# Install pre-commit (Python tool)
-pip install pre-commit
-
-# Set up hooks (if we add .pre-commit-config.yaml)
-pre-commit install
-```
-
-### Local CI Simulation
-
-Run the same checks as CI:
-
-```bash
-# Full CI simulation
-cargo make ci
-
-# Individual checks
-cargo make format-check
-cargo make clippy
-cargo make test
-cargo make audit
-cargo make deny
-```
-
-## Release Process
-
-### Version Management
-
-1. **Update version numbers** in `Cargo.toml` files
-2. **Update CHANGELOG.md** with new features and fixes
-3. **Create release PR** with version bump
-4. **Merge to main** after approval
-5. **Create git tag** in format `v1.2.3`
-6. **GitHub Actions** handles the rest automatically
-
-### Release Automation
-
-The release workflow automatically:
-
-- Builds cross-platform binaries
-- Creates GitHub release with changelog
-- Uploads binary assets
-- Publishes to crates.io
-- Generates release notes
-
-### Hotfix Process
-
-For critical fixes:
-
-1. **Create hotfix branch** from latest release tag
-2. **Apply minimal fix** with tests
-3. **Version bump** patch number
-4. **Fast-track review** and merge
-5. **Tag immediately** to trigger release
-
-## Performance Monitoring
-
-### Benchmarks
-
-- **Micro-benchmarks**: Use `criterion` for performance-critical code
-- **Integration benchmarks**: Full workflow timing
-- **Memory profiling**: Track memory usage patterns
-- **Performance regression**: CI catches slowdowns
-
-### Profiling
-
-```bash
-# CPU profiling
-cargo install cargo-profiler
-cargo profiler callgrind --bin janet-retriever
-
-# Memory profiling
-cargo install cargo-valgrind
-cargo valgrind --tool=massif --bin janet-retriever
-```
+- **License compliance**: Only MIT, Apache-2.0, BSD licenses allowed
+- **Dependency audits**: Automated vulnerability scanning
+- **Supply chain validation**: Source and license verification
 
 ## Troubleshooting
 
-### Common CI Failures
+### Common Issues
 
-- **Format check fails**: Run `cargo make format` locally
-- **Clippy warnings**: Run `cargo make clippy-fix` for auto-fixes
-- **Test failures**: Run `cargo make test` with `--nocapture` for details
-- **Coverage too low**: Add tests to increase coverage
-- **Security audit fails**: Update dependencies or add exceptions
+- **Format check fails**: Run `cargo fmt`
+- **Clippy warnings**: Run `cargo clippy --fix --allow-dirty --allow-staged`
+- **Test failures**: Run `cargo test -- --nocapture` for detailed output
+- **Pre-commit issues**: Run `pre-commit run --all-files` to check all files
 
-### Local Development Issues
+### Build Issues
 
-- **SQLite errors**: Ensure file permissions and disk space
-- **Build failures**: Clean with `cargo make clean` and rebuild
-- **Test database conflicts**: Use `cargo test -- --test-threads=1`
+- **Clean build**: `cargo clean && cargo build`
+- **Update dependencies**: `cargo update`
+- **Check individual crates**: `cargo check -p janet-ai-context`
 
-### Dependency Issues
+### Pre-commit Setup Issues
 
-- **Version conflicts**: Use `cargo tree` to debug
-- **License violations**: Check `cargo license` output
-- **Audit failures**: Review `cargo audit` recommendations
+```bash
+# Reinstall pre-commit hooks
+pre-commit uninstall
+pre-commit install
+pre-commit install --hook-type commit-msg
+
+# Test hooks manually
+pre-commit run --all-files
+```
 
 ## Contributing
 
-### Code Review Checklist
-
-- [ ] Follows conventional commit format
-- [ ] All tests pass locally
-- [ ] Documentation updated for public APIs
-- [ ] No new clippy warnings
-- [ ] Security implications considered
-- [ ] Performance impact assessed
-- [ ] Breaking changes documented
-
 ### Merge Requirements
 
-- [ ] CI passes completely
+- [ ] All CI checks pass
+- [ ] Pre-commit hooks pass
 - [ ] At least one approving review
-- [ ] No conflicts with main branch
-- [ ] Conventional commit title
-- [ ] Documentation builds successfully
+- [ ] Conventional commit format
+- [ ] No breaking changes without documentation
+
+### Local Development Best Practices
+
+- Use feature branches for all changes
+- Keep commits focused and atomic
+- Write tests for new functionality
+- Update documentation for public APIs
+- Run the full test suite before pushing
 
 ## Resources
 
 - [Conventional Commits](https://www.conventionalcommits.org/)
 - [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- [Cargo Book](https://doc.rust-lang.org/cargo/)
-- [rustfmt Configuration](https://rust-lang.github.io/rustfmt/)
-- [Clippy Documentation](https://rust-lang.github.io/rust-clippy/)
+- [pre-commit documentation](https://pre-commit.com/)
+- [uv documentation](https://docs.astral.sh/uv/)
