@@ -73,8 +73,21 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
 
+    - name: Cache cargo-audit binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-audit
+        key: ${{ runner.os }}-cargo-audit-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-audit-bin-
+
     - name: Install cargo-audit
-      run: cargo install cargo-audit --locked
+      run: |
+        if ! command -v cargo-audit &> /dev/null; then
+          cargo install cargo-audit --locked
+        else
+          echo "cargo-audit already installed, using cached version"
+        fi
 
     - name: Run security audit
       run: cargo audit --ignore RUSTSEC-2023-0071
@@ -99,8 +112,21 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
 
+    - name: Cache cargo-llvm-cov binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-llvm-cov
+        key: ${{ runner.os }}-cargo-llvm-cov-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-llvm-cov-bin-
+
     - name: Install cargo-llvm-cov
-      run: cargo install cargo-llvm-cov --locked
+      run: |
+        if ! command -v cargo-llvm-cov &> /dev/null; then
+          cargo install cargo-llvm-cov --locked
+        else
+          echo "cargo-llvm-cov already installed, using cached version"
+        fi
 
     - name: Generate test coverage
       run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info

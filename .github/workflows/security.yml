@@ -31,8 +31,21 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
 
+    - name: Cache cargo-audit binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-audit
+        key: ${{ runner.os }}-cargo-audit-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-audit-bin-
+
     - name: Install cargo-audit
-      run: cargo install cargo-audit --locked
+      run: |
+        if ! command -v cargo-audit &> /dev/null; then
+          cargo install cargo-audit --locked
+        else
+          echo "cargo-audit already installed, using cached version"
+        fi
 
     - name: Run security audit
       run: cargo audit --json --ignore RUSTSEC-2023-0071 | tee audit-results.json
@@ -53,8 +66,21 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Cache cargo-license binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-license
+        key: ${{ runner.os }}-cargo-license-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-license-bin-
+
     - name: Install cargo-license
-      run: cargo install cargo-license --locked
+      run: |
+        if ! command -v cargo-license &> /dev/null; then
+          cargo install cargo-license --locked
+        else
+          echo "cargo-license already installed, using cached version"
+        fi
 
     - name: Check dependency licenses
       run: |
@@ -85,8 +111,21 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Cache cargo-deny binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-deny
+        key: ${{ runner.os }}-cargo-deny-bin
+        restore-keys: |
+          ${{ runner.os }}-cargo-deny-bin-
+
     - name: Install cargo-deny
-      run: cargo install cargo-deny --locked
+      run: |
+        if ! command -v cargo-deny &> /dev/null; then
+          cargo install cargo-deny --locked
+        else
+          echo "cargo-deny already installed, using cached version"
+        fi
 
     - name: Create cargo-deny config
       run: |
