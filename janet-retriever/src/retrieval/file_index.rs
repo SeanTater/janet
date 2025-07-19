@@ -231,15 +231,151 @@ impl FileIndex {
         Ok(result.rows_affected() as usize)
     }
 
+    /// Get a chunk by ID
+    pub async fn get_chunk_by_id(&self, id: i64) -> Result<Option<ChunkRef>> {
+        let row = sqlx::query(
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding FROM chunks WHERE id = ?1"
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let id: i64 = row.get("id");
+            let file_hash_bytes: Vec<u8> = row.get("file_hash");
+            let relative_path: String = row.get("relative_path");
+            let line_start: i64 = row.get("line_start");
+            let line_end: i64 = row.get("line_end");
+            let content: String = row.get("content");
+            let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
+            
+            let mut file_hash = [0u8; 32];
+            file_hash.copy_from_slice(&file_hash_bytes[..32]);
+            
+            let embedding = embedding_bytes.map(|bytes| {
+                bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
+            });
+
+            Ok(Some(ChunkRef {
+                id: Some(id),
+                file_hash,
+                relative_path,
+                line_start: line_start as usize,
+                line_end: line_end as usize,
+                content,
+                embedding,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update a chunk's embedding by ID
+    pub async fn update_chunk_embedding(&self, id: i64, embedding: Option<&[f32]>) -> Result<()> {
+        let embedding_bytes = embedding.map(|e| bytemuck::cast_slice::<f32, u8>(e));
+        
+        sqlx::query("UPDATE chunks SET embedding = ?1 WHERE id = ?2")
+            .bind(embedding_bytes)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        
+        Ok(())
+    }
+
+    /// Get all chunks with embeddings
+    pub async fn get_all_chunks_with_embeddings(&self) -> Result<Vec<ChunkRef>> {
+        let rows = sqlx::query(
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
+             FROM chunks WHERE embedding IS NOT NULL"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut chunks = Vec::new();
+        for row in rows {
+            let id: i64 = row.get("id");
+            let file_hash_bytes: Vec<u8> = row.get("file_hash");
+            let relative_path: String = row.get("relative_path");
+            let line_start: i64 = row.get("line_start");
+            let line_end: i64 = row.get("line_end");
+            let content: String = row.get("content");
+            let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
+            
+            let mut file_hash = [0u8; 32];
+            file_hash.copy_from_slice(&file_hash_bytes[..32]);
+            
+            let embedding = embedding_bytes.map(|bytes| {
+                bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
+            });
+
+            chunks.push(ChunkRef {
+                id: Some(id),
+                file_hash,
+                relative_path,
+                line_start: line_start as usize,
+                line_end: line_end as usize,
+                content,
+                embedding,
+            });
+        }
+        Ok(chunks)
+    }
+
+    /// Update chunk by ID
+    pub async fn update_chunk_by_id(&self, id: i64, chunk: &ChunkRef) -> Result<()> {
+        let embedding_bytes = chunk.embedding.as_ref().map(|e| bytemuck::cast_slice::<f32, u8>(e));
+        
+        sqlx::query(
+            "UPDATE chunks SET file_hash = ?1, relative_path = ?2, line_start = ?3, 
+             line_end = ?4, content = ?5, embedding = ?6 WHERE id = ?7"
+        )
+        .bind(&chunk.file_hash[..])
+        .bind(&chunk.relative_path)
+        .bind(chunk.line_start as i64)
+        .bind(chunk.line_end as i64)
+        .bind(&chunk.content)
+        .bind(embedding_bytes)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        
+        Ok(())
+    }
+
+    /// Delete embeddings for specific chunk IDs
+    pub async fn delete_embeddings_by_ids(&self, chunk_ids: &[i64]) -> Result<()> {
+        if chunk_ids.is_empty() {
+            return Ok(());
+        }
+
+        // Build a query with placeholders
+        let placeholders = chunk_ids.iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        
+        let query = format!("UPDATE chunks SET embedding = NULL WHERE id IN ({})", placeholders);
+        let mut query_builder = sqlx::query(&query);
+        
+        for id in chunk_ids {
+            query_builder = query_builder.bind(id);
+        }
+        
+        query_builder.execute(&self.pool).await?;
+        Ok(())
+    }
+
     /// Generic get method for backward compatibility
-    pub async fn get<T>(&self, table: &str, key: &[u8]) -> Result<Option<T>> {
+    pub async fn get<T>(&self, _table: &str, _key: &[u8]) -> Result<Option<T>> {
         // This is a simplified version - the original used bincode serialization
         // For a proper implementation, we'd need to know the type T and have appropriate queries
         unimplemented!("Generic get method needs specific type handling")
     }
 
     /// Generic upsert method for backward compatibility  
-    pub async fn upsert<T, F>(&self, table: &str, key: &[u8], merge: F) -> Result<Option<T>>
+    pub async fn upsert<T, F>(&self, _table: &str, _key: &[u8], _merge: F) -> Result<Option<T>>
     where
         F: Fn(Option<T>) -> Option<T>,
     {

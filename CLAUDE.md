@@ -84,3 +84,15 @@ The project references ChunkHound architecture (see ARCHITECTURE_REFERENCE.md), 
 - janet-context: Functional library with CLI tool
 - janet-retriever: Basic structure in place, main components need implementation
 - Build warnings exist for unused fields in BertChunkConfig (analyzer.rs:21-24)
+
+## Development Philosophy
+- Use tracing rather than log
+- Use "sans io" (separate io operations from pure functions) when possible to keep things easy to test
+- Lean into a local-first policy: 
+  - Prefer sqlite over pinecone
+  - Prefer ollama/llamacpp over openai/anthropic
+  - Prefer bundled solutions over separate when feasible (like a rust library rather than a python dependency or separate API)
+- Document concisely, but completely
+- Clear code is better than clear docs
+- Write benchmarks and keep track of them, but don't obsess
+- Keep files under 500 lines if possible
