@@ -141,6 +141,23 @@ impl EnhancedFileIndex {
         Ok(enhanced)
     }
     
+    /// Create a new enhanced file index using in-memory database (for testing)
+    #[cfg(test)]
+    pub async fn open_memory(base: &Path) -> Result<Self> {
+        let file_index = FileIndex::open_memory(base).await?;
+        let pool = file_index.pool().clone();
+        
+        let enhanced = Self {
+            file_index,
+            pool: pool.clone(),
+        };
+        
+        // Create additional tables for metadata
+        enhanced.create_metadata_tables().await?;
+        
+        Ok(enhanced)
+    }
+    
     /// Create metadata tables
     async fn create_metadata_tables(&self) -> Result<()> {
         // Create index metadata table
@@ -506,7 +523,7 @@ mod tests {
     #[tokio::test]
     async fn test_enhanced_index_creation() -> Result<()> {
         let temp_dir = tempdir()?;
-        let index = EnhancedFileIndex::open(temp_dir.path()).await?;
+        let index = EnhancedFileIndex::open_memory(temp_dir.path()).await?;
         
         // Should be able to access underlying FileIndex methods
         let stats = index.get_index_stats().await?;
@@ -519,7 +536,7 @@ mod tests {
     #[tokio::test]
     async fn test_embedding_model_registration() -> Result<()> {
         let temp_dir = tempdir()?;
-        let index = EnhancedFileIndex::open(temp_dir.path()).await?;
+        let index = EnhancedFileIndex::open_memory(temp_dir.path()).await?;
         
         let model = EmbeddingModelMetadata::new(
             "test-model".to_string(),
@@ -544,7 +561,7 @@ mod tests {
     #[tokio::test]
     async fn test_index_metadata() -> Result<()> {
         let temp_dir = tempdir()?;
-        let index = EnhancedFileIndex::open(temp_dir.path()).await?;
+        let index = EnhancedFileIndex::open_memory(temp_dir.path()).await?;
         
         let metadata = IndexMetadata::new("test-repo".to_string())
             .with_metadata("test_key".to_string(), "test_value".to_string());

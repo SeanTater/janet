@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, error, info, warn};
 
-use super::chunking_strategy::{ChunkingConfig, ChunkingStrategy, ContentType};
+use super::chunking_strategy::{ChunkingConfig, ChunkingStrategy};
 use super::enhanced_index::{
     EnhancedFileIndex, EmbeddingModelMetadata, IndexMetadata, IndexStats,
 };
@@ -78,7 +78,6 @@ pub struct FileProcessingResult {
     pub chunks_created: usize,
     pub embeddings_generated: usize,
     pub processing_time: Duration,
-    pub content_type: ContentType,
 }
 
 /// The main indexing engine that orchestrates file watching, chunking, and embedding
@@ -105,10 +104,31 @@ pub struct ProcessingStats {
 impl IndexingEngine {
     /// Create a new indexing engine
     pub async fn new(config: IndexingEngineConfig) -> Result<Self> {
+        Self::new_impl(config, false).await
+    }
+    
+    /// Create a new indexing engine with in-memory database (for testing)
+    #[cfg(test)]
+    pub async fn new_memory(config: IndexingEngineConfig) -> Result<Self> {
+        Self::new_impl(config, true).await
+    }
+    
+    async fn new_impl(config: IndexingEngineConfig, use_memory: bool) -> Result<Self> {
         info!("Initializing IndexingEngine for {}", config.repository);
         
         // Initialize enhanced file index
-        let enhanced_index = EnhancedFileIndex::open(&config.base_path).await?;
+        let enhanced_index = if use_memory {
+            #[cfg(test)]
+            {
+                EnhancedFileIndex::open_memory(&config.base_path).await?
+            }
+            #[cfg(not(test))]
+            {
+                unreachable!("Memory mode only available in tests")
+            }
+        } else {
+            EnhancedFileIndex::open(&config.base_path).await?
+        };
         
         // Initialize task queue
         let task_queue = TaskQueue::new(config.task_queue_config.clone());
@@ -279,7 +299,6 @@ impl IndexingEngine {
                 chunks_created: 0,
                 embeddings_generated: 0,
                 processing_time: start_time.elapsed(),
-                content_type: chunking_strategy.get_content_type(file_path),
             });
         }
         
@@ -300,31 +319,28 @@ impl IndexingEngine {
         // Store file in database
         enhanced_index.upsert_file(&file_ref).await?;
         
-        // Chunk the content
-        let chunk_infos = chunking_strategy.chunk_content(file_path, &content)?;
-        let content_type = chunking_strategy.get_content_type(file_path);
+        // Chunk the content using janet-ai-context
+        let owned_chunks = chunking_strategy.chunk_content(file_path, &content)?;
         
-        if chunk_infos.is_empty() {
+        if owned_chunks.is_empty() {
             return Ok(FileProcessingResult {
                 file_path: file_path.to_path_buf(),
                 chunks_created: 0,
                 embeddings_generated: 0,
                 processing_time: start_time.elapsed(),
-                content_type,
             });
         }
         
-        // Convert ChunkInfo to ChunkRef
-        let mut chunk_refs: Vec<ChunkRef> = chunk_infos
+        // Convert OwnedTextChunk to ChunkRef
+        let mut chunk_refs: Vec<ChunkRef> = owned_chunks
             .into_iter()
-            .enumerate()
-            .map(|(i, chunk_info)| ChunkRef {
+            .map(|owned_chunk| ChunkRef {
                 id: None,
                 file_hash,
-                relative_path: chunk_info.path,
-                line_start: i * 10, // Simple line numbering for now
-                line_end: (i + 1) * 10,
-                content: chunk_info.chunk_text,
+                relative_path: owned_chunk.path,
+                line_start: owned_chunk.sequence * 10, // Simple line numbering based on sequence
+                line_end: (owned_chunk.sequence + 1) * 10,
+                content: owned_chunk.chunk_text,
                 embedding: None,
             })
             .collect();
@@ -361,7 +377,6 @@ impl IndexingEngine {
             chunks_created: chunk_refs.len(),
             embeddings_generated,
             processing_time: start_time.elapsed(),
-            content_type,
         })
     }
     
@@ -381,7 +396,6 @@ impl IndexingEngine {
             chunks_created: 0,
             embeddings_generated: 0,
             processing_time: start_time.elapsed(),
-            content_type: ContentType::Unknown,
         })
     }
     
@@ -403,7 +417,6 @@ impl IndexingEngine {
             chunks_created: 0,
             embeddings_generated: 0,
             processing_time: Duration::from_secs(0),
-            content_type: ContentType::Unknown,
         })
     }
     
@@ -445,7 +458,6 @@ impl IndexingEngine {
             chunks_created: total_chunks,
             embeddings_generated: total_embeddings,
             processing_time: start_time.elapsed(),
-            content_type: ContentType::Unknown,
         })
     }
     
@@ -518,7 +530,6 @@ impl Clone for ProcessingStats {
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    use std::path::PathBuf;
     
     #[tokio::test]
     async fn test_indexing_engine_creation() -> Result<()> {
@@ -528,7 +539,7 @@ mod tests {
             temp_dir.path().to_path_buf(),
         ).with_mode(IndexingMode::ReadOnly);
         
-        let engine = IndexingEngine::new(config).await?;
+        let engine = IndexingEngine::new_memory(config).await?;
         
         // Should be able to get stats even in read-only mode
         let stats = engine.get_index_stats().await?;
@@ -545,7 +556,7 @@ mod tests {
             temp_dir.path().to_path_buf(),
         ).with_mode(IndexingMode::ContinuousMonitoring);
         
-        let mut engine = IndexingEngine::new(config).await?;
+        let mut engine = IndexingEngine::new_memory(config).await?;
         engine.start().await?;
         
         // Create a test file

@@ -103,6 +103,7 @@
 //! ```
 use regex::Regex;
 use std::ops::Range;
+use std::path::Path;
 
 /// Default regular expression patterns for splitting Markdown content into logical segments.
 ///
@@ -125,6 +126,51 @@ pub const DEFAULT_MARKDOWN_DELIMITERS: &[&str] = &[
     r"\n",               // Line breaks
     r" ",                // Spaces
 ];
+
+/// Code-specific delimiters for better chunking of programming languages
+pub const CODE_DELIMITERS: &[&str] = &[
+    r"(?m)^(pub\s+)?(struct|enum|trait|impl|fn|class|def|function|interface)\s+\w+", // Declarations
+    r"(?m)^(import|use|from|#include)\s+", // Import statements
+    r"(?m)^(package|namespace|module)\s+", // Module declarations
+    r"\n\n",             // Paragraph breaks
+    r"\n",               // Line breaks
+    r" ",                // Spaces
+];
+
+/// Get appropriate delimiters based on file extension
+pub fn get_delimiters_for_path(path: &Path) -> &'static [&'static str] {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("md") | Some("markdown") | Some("txt") => DEFAULT_MARKDOWN_DELIMITERS,
+        Some("rs") | Some("py") | Some("js") | Some("ts") | Some("jsx") | Some("tsx") |
+        Some("go") | Some("java") | Some("c") | Some("cpp") | Some("h") | Some("hpp") => CODE_DELIMITERS,
+        _ => {
+            // Check for common documentation files
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                if filename.starts_with("README") || filename.starts_with("CHANGELOG") {
+                    return DEFAULT_MARKDOWN_DELIMITERS;
+                }
+            }
+            CODE_DELIMITERS // Default to code delimiters for unknown files
+        }
+    }
+}
+
+/// Create a TextContextBuilder configured for the given file path
+pub fn create_builder_for_path(
+    repo: String,
+    file_path: &Path,
+    max_chunk_length: Option<usize>,
+) -> TextContextBuilder {
+    let delimiters = get_delimiters_for_path(file_path);
+    let chunk_size = max_chunk_length.unwrap_or(2000);
+    
+    TextContextBuilder::new(
+        repo,
+        file_path.to_string_lossy().to_string(),
+        delimiters,
+        chunk_size,
+    )
+}
 
 /// Represents a builder for creating text contexts from file content.
 ///
