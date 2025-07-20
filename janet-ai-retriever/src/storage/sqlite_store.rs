@@ -101,8 +101,21 @@ impl ChunkStore for SqliteStore {
                 })
                 .collect())
         } else {
-            // Would need to implement a global query in FileIndex
-            unimplemented!("Global chunk listing not yet implemented")
+            // Get all chunks from the database
+            let chunks = self.file_index.get_all_chunks().await?;
+            Ok(chunks
+                .into_iter()
+                .filter_map(|chunk| {
+                    chunk.id.map(|id| ChunkMetadata {
+                        id,
+                        file_hash: chunk.file_hash,
+                        relative_path: chunk.relative_path,
+                        line_start: chunk.line_start,
+                        line_end: chunk.line_end,
+                        has_embedding: chunk.embedding.is_some(),
+                    })
+                })
+                .collect())
         }
     }
 
