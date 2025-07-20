@@ -32,10 +32,6 @@ pub enum TaskType {
     IndexFile { path: PathBuf },
     /// Remove a file from the index (when deleted)
     RemoveFile { path: PathBuf },
-    /// Full reindex of a directory
-    FullReindex { root_path: PathBuf },
-    /// Batch index multiple files (for efficiency)
-    BatchIndex { paths: Vec<PathBuf> },
 }
 
 /// A task in the indexing queue
@@ -81,16 +77,6 @@ impl IndexingTask {
         Self::new(TaskType::RemoveFile { path }, TaskPriority::High)
     }
     
-    /// Create a critical task for full reindex
-    pub fn full_reindex(root_path: PathBuf) -> Self {
-        Self::new(TaskType::FullReindex { root_path }, TaskPriority::Critical)
-    }
-    
-    /// Create a batch indexing task
-    pub fn batch_index(paths: Vec<PathBuf>, priority: TaskPriority) -> Self {
-        Self::new(TaskType::BatchIndex { paths }, priority)
-    }
-    
     /// Get the age of this task in seconds
     pub fn age_seconds(&self) -> u64 {
         SystemTime::now()
@@ -115,8 +101,6 @@ impl IndexingTask {
         match &self.task_type {
             TaskType::IndexFile { path } => format!("Index file: {}", path.display()),
             TaskType::RemoveFile { path } => format!("Remove file: {}", path.display()),
-            TaskType::FullReindex { root_path } => format!("Full reindex: {}", root_path.display()),
-            TaskType::BatchIndex { paths } => format!("Batch index {} files", paths.len()),
         }
     }
 }
@@ -140,7 +124,6 @@ impl PriorityTask {
                     .map(|t| t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs())
                     .unwrap_or(0)
             }
-            _ => task.created_at, // Use creation time for other tasks
         };
         
         Self { task, file_priority }

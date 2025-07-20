@@ -259,25 +259,6 @@ impl IndexingEngine {
             TaskType::RemoveFile { path } => {
                 Self::remove_file(path, &self.enhanced_index, start_time).await
             }
-            TaskType::FullReindex { root_path } => {
-                Self::process_full_reindex(
-                    root_path,
-                    &self.chunking_strategy,
-                    &self.enhanced_index,
-                    &self.embedding_provider,
-                    self.embedding_model_metadata.as_ref().map(|m| m.model_id()),
-                ).await
-            }
-            TaskType::BatchIndex { paths } => {
-                Self::process_batch(
-                    paths,
-                    &self.chunking_strategy,
-                    &self.enhanced_index,
-                    &self.embedding_provider,
-                    self.embedding_model_metadata.as_ref().map(|m| m.model_id()),
-                    start_time,
-                ).await
-            }
         }
     }
     
@@ -399,77 +380,69 @@ impl IndexingEngine {
         })
     }
     
-    /// Process a full reindex
-    async fn process_full_reindex(
-        root_path: &Path,
-        _chunking_strategy: &ChunkingStrategy,
-        _enhanced_index: &EnhancedFileIndex,
-        _embedding_provider: &Option<FastEmbedProvider>,
-        _embedding_model_id: Option<String>,
-    ) -> Result<FileProcessingResult> {
-        info!("Starting full reindex of: {}", root_path.display());
-        
-        // TODO: Implement full reindex logic
-        // This would walk the directory tree and schedule individual file tasks
-        
-        Ok(FileProcessingResult {
-            file_path: root_path.to_path_buf(),
-            chunks_created: 0,
-            embeddings_generated: 0,
-            processing_time: Duration::from_secs(0),
-        })
-    }
     
-    /// Process a batch of files
-    async fn process_batch(
-        paths: &[PathBuf],
-        chunking_strategy: &ChunkingStrategy,
-        enhanced_index: &EnhancedFileIndex,
-        embedding_provider: &Option<FastEmbedProvider>,
-        embedding_model_id: Option<String>,
-        start_time: std::time::Instant,
-    ) -> Result<FileProcessingResult> {
-        debug!("Processing batch of {} files", paths.len());
-        
-        let mut total_chunks = 0;
-        let mut total_embeddings = 0;
-        
-        for path in paths {
-            match Self::process_file(
-                path,
-                chunking_strategy,
-                enhanced_index,
-                embedding_provider,
-                embedding_model_id.clone(),
-                start_time,
-            ).await {
-                Ok(result) => {
-                    total_chunks += result.chunks_created;
-                    total_embeddings += result.embeddings_generated;
-                }
-                Err(e) => {
-                    error!("Failed to process file in batch {}: {}", path.display(), e);
-                }
-            }
-        }
-        
-        Ok(FileProcessingResult {
-            file_path: PathBuf::from(format!("batch-{}-files", paths.len())),
-            chunks_created: total_chunks,
-            embeddings_generated: total_embeddings,
-            processing_time: start_time.elapsed(),
-        })
-    }
-    
-    /// Schedule a full reindex
+    /// Schedule a full reindex by walking the directory tree and adding individual file tasks
     pub async fn schedule_full_reindex(&self) -> Result<()> {
         if !self.config.mode.allows_indexing() {
             return Err(anyhow::anyhow!("Full reindex not allowed in read-only mode"));
         }
         
-        let task = IndexingTask::full_reindex(self.config.base_path.clone());
-        self.task_queue.submit_task(task).await
-            .map_err(|e| anyhow::anyhow!("Failed to schedule full reindex: {}", e))
+        info!("Starting full reindex of: {}", self.config.base_path.display());
+        
+        let mut files_scheduled = 0;
+        let mut tasks_batch = Vec::new();
+        const BATCH_SIZE: usize = 100; // Submit tasks in batches to avoid overwhelming the queue
+        
+        // Use a stack to implement depth-first traversal
+        let mut dir_stack = vec![self.config.base_path.clone()];
+        
+        while let Some(current_dir) = dir_stack.pop() {
+            let mut read_dir = match tokio::fs::read_dir(&current_dir).await {
+                Ok(rd) => rd,
+                Err(e) => {
+                    warn!("Failed to read directory {}: {}", current_dir.display(), e);
+                    continue;
+                }
+            };
+            
+            while let Some(entry) = read_dir.next_entry().await? {
+                let path = entry.path();
+                let metadata = match entry.metadata().await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        warn!("Failed to get metadata for {}: {}", path.display(), e);
+                        continue;
+                    }
+                };
+                
+                if metadata.is_file() && self.chunking_strategy.should_index_file(&path) {
+                    // Add to batch for background indexing during full reindex
+                    let task = IndexingTask::index_file_background(path);
+                    tasks_batch.push(task);
+                    files_scheduled += 1;
+                    
+                    // Submit batch when it reaches the target size
+                    if tasks_batch.len() >= BATCH_SIZE {
+                        if let Err(e) = self.task_queue.submit_tasks(tasks_batch.drain(..).collect()).await {
+                            warn!("Failed to submit batch of tasks: {}", e);
+                        }
+                    }
+                } else if metadata.is_dir() {
+                    // Add subdirectory to stack for processing
+                    dir_stack.push(path);
+                }
+            }
+        }
+        
+        // Submit any remaining tasks in the final batch
+        if !tasks_batch.is_empty() {
+            if let Err(e) = self.task_queue.submit_tasks(tasks_batch).await {
+                warn!("Failed to submit final batch of tasks: {}", e);
+            }
+        }
+        
+        info!("Scheduled {} files for background indexing", files_scheduled);
+        Ok(())
     }
     
     /// Schedule indexing of a single file
@@ -568,6 +541,54 @@ mod tests {
         
         // Give some time for processing
         tokio::time::sleep(Duration::from_millis(100)).await;
+        
+        engine.shutdown().await?;
+        
+        Ok(())
+    }
+    
+    #[tokio::test]
+    async fn test_full_reindex_schedules_individual_tasks() -> Result<()> {
+        let temp_dir = tempdir()?;
+        
+        // Create multiple test files
+        tokio::fs::write(temp_dir.path().join("file1.rs"), "fn main() {}").await?;
+        tokio::fs::write(temp_dir.path().join("file2.py"), "print('hello')").await?;
+        tokio::fs::write(temp_dir.path().join("file3.js"), "console.log('hi')").await?;
+        tokio::fs::write(temp_dir.path().join("README.md"), "# Test Project").await?;
+        
+        // Create a subdirectory with more files
+        let subdir = temp_dir.path().join("src");
+        tokio::fs::create_dir(&subdir).await?;
+        tokio::fs::write(subdir.join("lib.rs"), "pub mod test;").await?;
+        tokio::fs::write(subdir.join("test.rs"), "#[test] fn test() {}").await?;
+        
+        let config = IndexingEngineConfig::new(
+            "test-repo".to_string(),
+            temp_dir.path().to_path_buf(),
+        ).with_mode(IndexingMode::FullReindex);
+        
+        let mut engine = IndexingEngine::new_memory(config).await?;
+        engine.start().await?;
+        
+        // Get initial queue size (should be 0)
+        let initial_queue_size = engine.task_queue.queue_size().await;
+        assert_eq!(initial_queue_size, 0);
+        
+        // Give some time for the full reindex to schedule tasks
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        
+        // Check that individual file tasks were scheduled
+        let final_queue_size = engine.task_queue.queue_size().await;
+        
+        // We should have at least 6 tasks (the 6 indexable files we created)
+        // Note: We expect 6 files because:
+        // - file1.rs, file2.py, file3.js, README.md (4 files in root)
+        // - src/lib.rs, src/test.rs (2 files in subdirectory)
+        assert!(final_queue_size >= 6, "Expected at least 6 tasks but found {}", final_queue_size);
+        
+        // Verify we can process some tasks
+        engine.process_pending_tasks().await?;
         
         engine.shutdown().await?;
         
