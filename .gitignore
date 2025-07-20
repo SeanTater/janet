@@ -52,3 +52,11 @@ test-results/
 
 # Task runner
 .task
+
+# ML Model caches
+.fastembed_cache/
+**/.fastembed_cache/
+models/
+**/*.onnx
+**/*.bin
+**/*.safetensors
