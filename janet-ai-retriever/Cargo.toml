@@ -15,6 +15,7 @@ futures = "0.3.31"
 hex = "0.4"
 ignore = "0.4.23"
 itertools = "0.14.0"
+janet-ai-embed = { path = "../janet-ai-embed" }
 notify = "8.0.0"
 notify-debouncer-mini = "0.6.0"
 reqwest = { version = "0.12.15", default-features = false, features = ["http2", "rustls-tls"] }

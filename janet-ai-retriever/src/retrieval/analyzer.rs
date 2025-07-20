@@ -1,7 +1,7 @@
 use super::file_index::{ChunkRef, FileIndex, FileRef};
 use anyhow::Result;
 use async_trait::async_trait;
-use reqwest::Client;
+use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider, TokenizerConfig};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -9,12 +9,28 @@ use std::{
 
 #[derive(Debug, serde::Deserialize)]
 pub struct BertChunkConfig {
-    #[allow(dead_code)]
-    api_base: String,
-    #[allow(dead_code)]
-    api_key: String,
-    chunk_size_lines: usize,
-    chunk_step_lines: usize,
+    /// Base path for embedding models (e.g., "models/")
+    pub model_base_path: Option<String>,
+    /// Name of the embedding model to use
+    pub model_name: Option<String>,
+    /// Number of lines per chunk
+    pub chunk_size_lines: usize,
+    /// Step size between chunks (for overlapping chunks)
+    pub chunk_step_lines: usize,
+    /// Whether to generate embeddings for chunks
+    pub generate_embeddings: bool,
+}
+
+impl Default for BertChunkConfig {
+    fn default() -> Self {
+        Self {
+            model_base_path: Some("models".to_string()),
+            model_name: Some("snowflake-arctic-embed-xs".to_string()),
+            chunk_size_lines: 50,
+            chunk_step_lines: 25,
+            generate_embeddings: true,
+        }
+    }
 }
 
 /// The new trait that abstracts the analyzer.
@@ -26,10 +42,9 @@ pub trait AnalyzerTrait: Send + Sync {
 /// The original Analyzer implementing the trait.
 pub struct RemoteBertChunkAnalyzer {
     file_index: FileIndex,
-    #[allow(dead_code)]
-    client: reqwest::Client,
     config: BertChunkConfig,
     gitignore: ignore::gitignore::Gitignore,
+    embedding_provider: Option<FastEmbedProvider>,
 }
 
 impl RemoteBertChunkAnalyzer {
@@ -38,8 +53,54 @@ impl RemoteBertChunkAnalyzer {
             gitignore: ignore::gitignore::Gitignore::new(&file_index.base).0,
             file_index,
             config,
-            client: Client::new(),
+            embedding_provider: None,
         }
+    }
+
+    /// Initialize the embedding provider if embeddings are enabled
+    pub async fn initialize_embeddings(&mut self) -> Result<()> {
+        if !self.config.generate_embeddings {
+            tracing::info!("Embeddings disabled in configuration");
+            return Ok(());
+        }
+
+        let model_base_path = self.config.model_base_path.as_deref().unwrap_or("models");
+        let model_name = self
+            .config
+            .model_name
+            .as_deref()
+            .unwrap_or("snowflake-arctic-embed-xs");
+
+        let model_dir = PathBuf::from(model_base_path).join(model_name);
+        let tokenizer_config = TokenizerConfig::standard(&model_dir);
+        let embed_config =
+            EmbedConfig::new(model_base_path, model_name, tokenizer_config).with_batch_size(16); // Smaller batch size for better responsiveness
+
+        match FastEmbedProvider::create(embed_config).await {
+            Ok(provider) => {
+                tracing::info!("Embedding provider initialized successfully");
+                self.embedding_provider = Some(provider);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to initialize embedding provider: {}. Continuing without embeddings.",
+                    e
+                );
+                // Don't fail the entire analyzer if embeddings can't be initialized
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Create and initialize a new analyzer with embeddings
+    pub async fn create_with_embeddings(
+        file_index: FileIndex,
+        config: BertChunkConfig,
+    ) -> Result<Self> {
+        let mut analyzer = Self::new(file_index, config);
+        analyzer.initialize_embeddings().await?;
+        Ok(analyzer)
     }
 
     pub async fn chunk_file(&self, relative_path: &Path) -> Result<Option<Vec<ChunkRef>>> {
@@ -69,24 +130,50 @@ impl RemoteBertChunkAnalyzer {
         };
         self.file_index.upsert_file(&file_ref).await?;
 
-        Ok(Some(
-            (0..lines.len())
-                .step_by(self.config.chunk_step_lines)
-                .map(|line_start| {
-                    let line_end = (line_start + self.config.chunk_size_lines).min(lines.len());
-                    let content = lines[line_start..line_end].join("\n");
-                    ChunkRef {
-                        id: None,
-                        file_hash,
-                        relative_path: relative_path.to_string_lossy().to_string(),
-                        line_start,
-                        line_end,
-                        content,
-                        embedding: None,
+        // Create chunks
+        let mut chunks: Vec<ChunkRef> = (0..lines.len())
+            .step_by(self.config.chunk_step_lines)
+            .map(|line_start| {
+                let line_end = (line_start + self.config.chunk_size_lines).min(lines.len());
+                let content = lines[line_start..line_end].join("\n");
+                ChunkRef {
+                    id: None,
+                    file_hash,
+                    relative_path: relative_path.to_string_lossy().to_string(),
+                    line_start,
+                    line_end,
+                    content,
+                    embedding: None,
+                }
+            })
+            .collect();
+
+        // Generate embeddings if provider is available
+        if let Some(provider) = &self.embedding_provider {
+            tracing::debug!("Generating embeddings for {} chunks", chunks.len());
+
+            let texts: Vec<String> = chunks.iter().map(|chunk| chunk.content.clone()).collect();
+
+            match provider.embed_texts(&texts).await {
+                Ok(embedding_result) => {
+                    let num_embeddings = embedding_result.len();
+                    for (chunk, embedding) in chunks.iter_mut().zip(embedding_result.embeddings) {
+                        chunk.embedding = Some(embedding);
                     }
-                })
-                .collect(),
-        ))
+                    tracing::debug!("Successfully generated {} embeddings", num_embeddings);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to generate embeddings for {}: {}",
+                        relative_path.display(),
+                        e
+                    );
+                    // Continue without embeddings rather than failing
+                }
+            }
+        }
+
+        Ok(Some(chunks))
     }
 }
 

@@ -1,0 +1,31 @@
+[package]
+name = "janet-ai-embed"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0.97"
+async-trait = "0.1.88"
+derive_builder = "0.20"
+fastembed = "5.0.0"
+half = { version = "2.4.1", features = ["bytemuck"] }
+hf-hub = "0.4.3"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0.9"
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "fs", "time", "macros"] }
+tracing = "0.1.41"
+
+[dev-dependencies]
+tempfile = "3.19.1"
+tokio-test = "0.4.4"
+tracing-subscriber = "0.3.19"
+
+[[example]]
+name = "simple_embedding"
+path = "examples/simple_embedding.rs"
+
+[[example]]
+name = "modernbert_example"
+path = "examples/modernbert_example.rs"
