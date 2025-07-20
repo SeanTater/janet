@@ -10,7 +10,7 @@ async fn main() -> Result<()> {
 
     // Parse command line arguments
     let matches = Command::new("janet-ai-mcp")
-        .version("0.1.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .about("Janet AI Model Context Protocol server")
         .arg(
             Arg::new("root")
