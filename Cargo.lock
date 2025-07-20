@@ -1698,6 +1698,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "derive_builder",
  "fastembed",
  "half",
  "hf-hub",

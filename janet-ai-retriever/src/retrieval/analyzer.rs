@@ -71,8 +71,7 @@ impl RemoteBertChunkAnalyzer {
             .as_deref()
             .unwrap_or("snowflake-arctic-embed-xs");
 
-        let embed_config =
-            EmbedConfig::new(model_base_path, model_name.to_string()).with_batch_size(16); // Smaller batch size for better responsiveness
+        let embed_config = EmbedConfig::new(model_base_path, model_name).with_batch_size(16); // Smaller batch size for better responsiveness
 
         match FastEmbedProvider::create(embed_config).await {
             Ok(provider) => {

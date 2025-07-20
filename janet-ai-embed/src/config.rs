@@ -1,84 +1,93 @@
 //! Configuration for embedding models
 
 use crate::error::{EmbedError, Result};
+use derive_builder::Builder;
 use std::path::{Path, PathBuf};
 
 /// Configuration for embedding models
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
 pub struct EmbedConfig {
     /// Path to the base directory containing model files
+    #[builder(default = r#"PathBuf::from("models")"#)]
     pub model_base_path: PathBuf,
     /// Name of the embedding model to use
     pub model_name: String,
     /// HuggingFace model repository (e.g., "answerdotai/ModernBERT-large")
+    #[builder(default)]
     pub hf_model_repo: Option<String>,
     /// HuggingFace model revision/branch (e.g., "main")
+    #[builder(default = r#"Some("main".to_string())"#)]
     pub hf_revision: Option<String>,
     /// Maximum batch size for embedding generation
+    #[builder(default = "32")]
     pub batch_size: usize,
     /// Whether to normalize embeddings
+    #[builder(default = "true")]
     pub normalize: bool,
 }
 
 impl EmbedConfig {
-    /// Create a new embedding configuration
-    pub fn new<P: AsRef<Path>>(model_base_path: P, model_name: String) -> Self {
-        Self {
-            model_base_path: model_base_path.as_ref().to_path_buf(),
-            model_name,
-            hf_model_repo: None,
-            hf_revision: None,
-            batch_size: 32,
-            normalize: true,
-        }
+    /// Create a new embedding configuration using the builder
+    pub fn builder() -> EmbedConfigBuilder {
+        EmbedConfigBuilder::default()
+    }
+
+    /// Create a new embedding configuration (convenience method)
+    pub fn new<P: AsRef<Path>>(model_base_path: P, model_name: impl Into<String>) -> Self {
+        EmbedConfigBuilder::default()
+            .model_base_path(model_base_path.as_ref())
+            .model_name(model_name)
+            .hf_model_repo(None::<String>)
+            .build()
+            .expect("Failed to build EmbedConfig")
     }
 
     /// Create a configuration for a HuggingFace model
     pub fn from_huggingface<P: AsRef<Path>>(
         model_base_path: P,
-        model_name: String,
-        hf_repo: String,
+        model_name: impl Into<String>,
+        hf_repo: impl Into<String>,
     ) -> Self {
-        Self {
-            model_base_path: model_base_path.as_ref().to_path_buf(),
-            model_name: model_name.clone(),
-            hf_model_repo: Some(hf_repo),
-            hf_revision: Some("main".to_string()),
-            batch_size: 16, // Smaller batch for larger models
-            normalize: true,
-        }
+        EmbedConfigBuilder::default()
+            .model_base_path(model_base_path.as_ref())
+            .model_name(model_name)
+            .hf_model_repo(Some(hf_repo.into()))
+            .batch_size(16usize) // Smaller batch for larger models
+            .build()
+            .expect("Failed to build EmbedConfig")
     }
 
     /// Create a default configuration for testing with a given path
     pub fn default_with_path<P: AsRef<Path>>(model_base_path: P) -> Self {
-        Self::new(model_base_path, "snowflake-arctic-embed-xs".to_string())
+        Self::new(model_base_path, "snowflake-arctic-embed-xs")
     }
 
     /// Create a ModernBERT-large configuration
     pub fn modernbert_large<P: AsRef<Path>>(model_base_path: P) -> Self {
         Self::from_huggingface(
             model_base_path,
-            "ModernBERT-large".to_string(),
-            "answerdotai/ModernBERT-large".to_string(),
+            "ModernBERT-large",
+            "answerdotai/ModernBERT-large",
         )
     }
 
-    /// Set the batch size for embedding generation
-    pub fn with_batch_size(mut self, batch_size: usize) -> Self {
-        self.batch_size = batch_size;
-        self
+    /// Set the batch size for embedding generation (builder style)
+    pub fn with_batch_size(self, batch_size: usize) -> Self {
+        Self { batch_size, ..self }
     }
 
-    /// Set whether to normalize embeddings
-    pub fn with_normalize(mut self, normalize: bool) -> Self {
-        self.normalize = normalize;
-        self
+    /// Set whether to normalize embeddings (builder style)
+    pub fn with_normalize(self, normalize: bool) -> Self {
+        Self { normalize, ..self }
     }
 
-    /// Set the HuggingFace revision
-    pub fn with_revision<S: Into<String>>(mut self, revision: S) -> Self {
-        self.hf_revision = Some(revision.into());
-        self
+    /// Set the HuggingFace revision (builder style)
+    pub fn with_revision<S: Into<String>>(self, revision: S) -> Self {
+        Self {
+            hf_revision: Some(revision.into()),
+            ..self
+        }
     }
 
     /// Get the full path to the model directory
@@ -153,14 +162,11 @@ impl EmbedConfig {
 
 impl Default for EmbedConfig {
     fn default() -> Self {
-        Self {
-            model_base_path: PathBuf::from("models"),
-            model_name: "snowflake-arctic-embed-xs".to_string(),
-            hf_model_repo: None,
-            hf_revision: None,
-            batch_size: 32,
-            normalize: true,
-        }
+        EmbedConfigBuilder::default()
+            .model_name("snowflake-arctic-embed-xs")
+            .hf_model_repo(None::<String>)
+            .build()
+            .expect("Failed to build default EmbedConfig")
     }
 }
 
@@ -172,7 +178,7 @@ mod tests {
     #[test]
     fn test_config_creation() {
         let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::new(temp_dir.path(), "test-model".to_string());
+        let config = EmbedConfig::new(temp_dir.path(), "test-model");
 
         assert_eq!(config.model_name, "test-model");
         assert_eq!(config.batch_size, 32);
@@ -183,7 +189,7 @@ mod tests {
     #[test]
     fn test_config_paths() {
         let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::new(temp_dir.path(), "test-model".to_string());
+        let config = EmbedConfig::new(temp_dir.path(), "test-model");
 
         let expected_base = temp_dir.path().join("test-model");
         assert_eq!(
@@ -204,11 +210,44 @@ mod tests {
     #[test]
     fn test_config_builder_methods() {
         let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::new(temp_dir.path(), "test-model".to_string())
+        let config = EmbedConfig::new(temp_dir.path(), "test-model")
             .with_batch_size(64)
             .with_normalize(false);
 
         assert_eq!(config.batch_size, 64);
         assert!(!config.normalize);
+    }
+
+    #[test]
+    fn test_derive_builder_pattern() {
+        let temp_dir = tempdir().unwrap();
+
+        // Test using the builder directly
+        let config = EmbedConfig::builder()
+            .model_base_path(temp_dir.path())
+            .model_name("custom-model")
+            .batch_size(128usize)
+            .normalize(false)
+            .build()
+            .unwrap();
+
+        assert_eq!(config.model_name, "custom-model");
+        assert_eq!(config.batch_size, 128);
+        assert!(!config.normalize);
+        assert_eq!(config.hf_revision, Some("main".to_string()));
+    }
+
+    #[test]
+    fn test_builder_defaults() {
+        // Test that defaults work correctly
+        let config = EmbedConfig::builder()
+            .model_name("test-model")
+            .build()
+            .unwrap();
+
+        assert_eq!(config.model_base_path, PathBuf::from("models"));
+        assert_eq!(config.batch_size, 32);
+        assert!(config.normalize);
+        assert_eq!(config.hf_revision, Some("main".to_string()));
     }
 }
