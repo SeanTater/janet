@@ -4,28 +4,38 @@ A high-performance code retrieval and analysis system built in Rust, designed fo
 
 ## Overview
 
-Janet is a Rust workspace containing two complementary crates for semantic code analysis:
+Janet is a Rust workspace containing three complementary crates for AI-powered code analysis and retrieval:
 
-- **janet-context**: A library for chunking code/text into structured passages optimized for retrieval models (RAG systems)
-- **janet-retriever**: A concurrent embedding database and file indexing system for semantic code search
+- **janet-ai-context**: A library for chunking code/text into structured passages optimized for retrieval models (RAG systems)
+- **janet-ai-embed**: A comprehensive embedding library with FastEmbed integration and multiple model support
+- **janet-ai-retriever**: A complete indexing system with file monitoring, text search, and vector similarity search
 
 ## Features
 
-### janet-context
+### janet-ai-context
 - 🧩 **Smart Text Chunking**: Breaks code into semantic chunks while preserving metadata
 - 📝 **Configurable Delimiters**: Customizable regex patterns for different content types
 - 🏷️ **Rich Metadata**: Each chunk includes repository, file path, and position information
 - 🖥️ **CLI Tool**: Process files directly from command line with JSON output
 - 🔄 **Content Reconstruction**: Guarantees original content can be rebuilt from chunks
 
-### janet-retriever
-- 🗄️ **SQLite-based Storage**: Robust, concurrent database with WAL mode for multi-process safety
-- 🔍 **Embedding Support**: Built-in storage for vector embeddings with efficient serialization
-- ⚡ **Async/Await**: Full async support for non-blocking operations
+### janet-ai-embed
+- 🤖 **FastEmbed Integration**: High-performance embedding generation using FastEmbed
+- 📦 **Automatic Model Management**: Downloads and caches models automatically
+- 🎯 **Multiple Model Support**: BGE, E5, ModernBERT, and other transformer models
+- ⚡ **Async Processing**: Full async/await support for embedding generation
+- 🔧 **Builder Pattern**: Flexible configuration with derive_builder
+- 🏗️ **Provider Abstraction**: Clean trait-based design for different backends
+
+### janet-ai-retriever
+- 🔄 **Indexing Engine**: Orchestrates file discovery, chunking, and embedding generation
+- 🗄️ **SQLite Storage**: Robust database with text search and vector similarity search
+- 🔍 **Dual Search**: Both substring text search and cosine similarity vector search
 - 🎯 **File Watching**: Real-time monitoring of code changes with debouncing
-- 🏗️ **Modular Architecture**: Clean traits for storage backends and analysis engines
-- 🧪 **Comprehensive Testing**: Memory-based testing with 100% async coverage
-- 🖥️ **Interactive CLI**: Manage chunk databases with search, statistics, and data inspection
+- 📋 **Task Queue**: Priority-based background processing with retry logic
+- ⚡ **Async Architecture**: Full async support for non-blocking operations
+- 🖥️ **Complete CLI**: Manage databases with search, statistics, and data inspection
+- 📊 **Rich Examples**: Comprehensive examples showing end-to-end workflows
 
 ## Getting Started
 
@@ -46,7 +56,7 @@ cargo test
 ### Quick Example: Text Chunking
 
 ```rust
-use janet_context::text::{TextContextBuilder, DEFAULT_MARKDOWN_DELIMITERS};
+use janet_ai_context::text::{TextContextBuilder, DEFAULT_MARKDOWN_DELIMITERS};
 
 let builder = TextContextBuilder::new(
     "my_project".to_string(),
@@ -61,21 +71,39 @@ for chunk in chunks {
 }
 ```
 
-### Quick Example: File Indexing
+### Quick Example: Embedding Generation
 
 ```rust
-use janet_retriever::retrieval::file_index::{FileIndex, FileRef};
+use janet_ai_embed::config::FastEmbedConfigBuilder;
+use janet_ai_embed::provider::FastEmbedProvider;
 
-let index = FileIndex::open("./project").await?;
+// Configure and create embedding provider
+let config = FastEmbedConfigBuilder::default()
+    .model_name("BAAI/bge-small-en-v1.5")
+    .build()?;
 
-// Index a file
-let file_ref = FileRef {
-    relative_path: "src/main.rs".to_string(),
-    content: source_code.into_bytes(),
-    hash: blake3::hash(&source_code).into(),
-};
+let provider = FastEmbedProvider::try_new(config).await?;
 
-index.upsert_file(&file_ref).await?;
+// Generate embeddings
+let texts = vec!["Hello world", "Rust programming"];
+let embeddings = provider.generate_embeddings(&texts).await?;
+```
+
+### Quick Example: End-to-End Indexing
+
+```rust
+use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+use janet_ai_retriever::retrieval::indexing_mode::IndexingMode;
+
+// Set up indexing engine
+let config = IndexingEngineConfig::new("my-project".to_string(), project_path)
+    .with_mode(IndexingMode::FullReindex)
+    .with_chunk_size(500);
+
+let mut engine = IndexingEngine::new_memory(config).await?;
+engine.start().await?;
+
+// Engine will discover, chunk, and optionally embed all files
 ```
 
 ## CLI Tools
@@ -114,6 +142,27 @@ cargo run -p janet-ai-retriever -- stats
 
 # Get help for any command
 cargo run -p janet-ai-retriever -- --help
+```
+
+### Examples
+
+Run comprehensive examples showing full workflows:
+
+```bash
+# End-to-end indexing with text search
+cargo run --example end_to_end_indexing
+
+# Working demo with file indexing
+cargo run --example working_demo
+
+# Embedding generation demo
+cargo run --example embedding_demo
+
+# Simple embedding example
+cargo run -p janet-ai-embed --example simple_embedding
+
+# ModernBERT embedding example
+cargo run -p janet-ai-embed --example modernbert_example
 ```
 
 #### Available Commands
@@ -163,16 +212,25 @@ Janet follows clean architecture principles with clear separation of concerns:
 ### Project Structure
 ```
 janet/
-├── janet-context/          # Text chunking library
+├── janet-ai-context/       # Text chunking library
 │   ├── src/
 │   │   ├── text.rs        # Core chunking logic
 │   │   └── bin/           # CLI tool
 │   └── README.md
-├── janet-retriever/        # Indexing and storage
+├── janet-ai-embed/         # Embedding generation library
 │   ├── src/
-│   │   ├── retrieval/     # File analysis and chunking
-│   │   ├── storage/       # Database abstractions
-│   │   └── migrations/    # Database schema
+│   │   ├── provider.rs    # FastEmbed provider implementation
+│   │   ├── config.rs      # Configuration and builders
+│   │   └── downloader.rs  # Model downloading
+│   ├── examples/          # Embedding examples
+│   └── README.md
+├── janet-ai-retriever/     # Indexing and storage
+│   ├── src/
+│   │   ├── retrieval/     # Indexing engine and file analysis
+│   │   ├── storage/       # Database abstractions and search
+│   │   └── main.rs        # CLI application
+│   ├── examples/          # End-to-end workflow examples
+│   ├── migrations/        # Database schema
 │   └── README.md
 ├── CLAUDE.md              # Development guidance
 └── ARCHITECTURE_REFERENCE.md  # Detailed architecture notes
@@ -185,8 +243,9 @@ janet/
 cargo test
 
 # Run specific crate tests
-cargo test -p janet-context
-cargo test -p janet-retriever
+cargo test -p janet-ai-context
+cargo test -p janet-ai-embed
+cargo test -p janet-ai-retriever
 
 # Run with output
 cargo test -- --nocapture
@@ -198,11 +257,12 @@ See [CLAUDE.md](./CLAUDE.md) for comprehensive development commands and architec
 
 ## Roadmap
 
-- 🔮 **Vector Similarity Search**: In-memory cosine similarity for semantic search
-- 🔌 **Embedding Providers**: Support for OpenAI, BGE, and local models
+- 🌐 **Additional Embedding Providers**: Support for OpenAI, Anthropic, and Cohere APIs
 - 🚀 **Performance Optimization**: Batch operations and connection pooling
-- 📊 **Metrics & Monitoring**: Comprehensive observability
+- 📊 **Metrics & Monitoring**: Comprehensive observability and performance tracking
 - 🔗 **API Server**: REST/GraphQL interface for external integrations
+- 🎯 **Advanced Search**: Hybrid search combining text and vector similarity
+- 📈 **Scalability**: Support for larger codebases and distributed indexing
 
 ## Contributing
 

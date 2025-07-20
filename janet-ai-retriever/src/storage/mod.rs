@@ -65,6 +65,9 @@ pub trait ChunkStore: Send + Sync {
 
     /// Get all chunks for a file
     async fn get_file_chunks(&self, file_hash: FileHash) -> Result<Vec<Chunk>>;
+
+    /// Search for chunks containing the specified text
+    async fn search_text(&self, search_term: &str, case_sensitive: bool) -> Result<Vec<Chunk>>;
 }
 
 /// Trait for vector similarity search

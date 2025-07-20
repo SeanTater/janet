@@ -1,6 +1,5 @@
 use clap::Parser;
 use janet_ai_context::text::{DEFAULT_MARKDOWN_DELIMITERS, TextContextBuilder};
-use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
 
@@ -64,27 +63,7 @@ fn main() -> io::Result<()> {
 
     let chunks = builder.get_chunks(&file_content);
 
-    #[derive(Serialize)]
-    struct SerializableTextChunk<'a> {
-        repo: &'a str,
-        path: &'a str,
-        sequence: usize,
-        chunk_text: &'a str,
-        summary: String,
-    }
-
-    let serializable_chunks: Vec<SerializableTextChunk> = chunks
-        .into_iter()
-        .map(|c| SerializableTextChunk {
-            repo: c.repo,
-            path: c.path,
-            sequence: c.sequence,
-            chunk_text: c.chunk_text,
-            summary: c.build(),
-        })
-        .collect();
-
-    let json_output = serde_json::to_string_pretty(&serializable_chunks)?;
+    let json_output = serde_json::to_string_pretty(&chunks)?;
     println!("{json_output}");
 
     Ok(())

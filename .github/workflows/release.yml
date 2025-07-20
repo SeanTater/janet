@@ -17,11 +17,11 @@ jobs:
       version: ${{ steps.get-version.outputs.version }}
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Get version from tag
       id: get-version
       run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-    
+
     - name: Create Release
       id: create-release
       uses: actions/create-release@v1
@@ -32,20 +32,20 @@ jobs:
         release_name: Release v${{ steps.get-version.outputs.version }}
         body: |
           # Release v${{ steps.get-version.outputs.version }}
-          
+
           ## What's Changed
-          
+
           This release includes the latest features and bug fixes.
           See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for detailed changes.
-          
+
           ## Installation
-          
+
           ### Using Cargo
           ```bash
           cargo install janet-ai-context --version ${{ steps.get-version.outputs.version }}
           cargo install janet-ai-retriever --version ${{ steps.get-version.outputs.version }}
           ```
-          
+
           ### Download Binaries
           Download the appropriate binary for your platform from the assets below.
         draft: false
@@ -76,16 +76,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: ${{ matrix.target }}
-    
+
     - name: Install musl tools
       run: sudo apt-get update && sudo apt-get install -y musl-tools
       if: matrix.target == 'x86_64-unknown-linux-musl'
-    
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -94,18 +94,18 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-    
+
     - name: Build release binaries
       run: |
         cargo build --release --target ${{ matrix.target }} --bin janet-ai-context-cli
         cargo build --release --target ${{ matrix.target }} --bin janet-ai-retriever
-    
+
     - name: Strip binaries (Linux and macOS)
       run: |
         strip target/${{ matrix.target }}/release/janet-ai-context-cli || true
         strip target/${{ matrix.target }}/release/janet-ai-retriever || true
       if: matrix.os != 'windows-latest'
-    
+
     - name: Package binaries
       shell: bash
       run: |
@@ -121,7 +121,7 @@ jobs:
           cd dist
           tar -czf janet-ai-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.tar.gz janet-ai-context-cli janet-ai-retriever
         fi
-    
+
     - name: Upload Release Asset (Windows)
       uses: actions/upload-release-asset@v1
       env:
@@ -132,7 +132,7 @@ jobs:
         asset_name: janet-ai-${{ needs.create-release.outputs.version }}-${{ matrix.name }}.zip
         asset_content_type: application/zip
       if: matrix.os == 'windows-latest'
-    
+
     - name: Upload Release Asset (Unix)
       uses: actions/upload-release-asset@v1
       env:
@@ -150,10 +150,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -162,12 +162,12 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
-    
+
     - name: Publish janet-ai-context to crates.io
       run: cargo publish -p janet-ai-context --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-    
+
     - name: Wait for janet-ai-context to be available
       run: sleep 30
-    
+
     - name: Publish janet-ai-retriever to crates.io
       run: cargo publish -p janet-ai-retriever --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
