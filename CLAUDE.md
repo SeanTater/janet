@@ -99,3 +99,7 @@ The project references ChunkHound architecture (see ARCHITECTURE_REFERENCE.md), 
 ## Git Workflow
 - Never commit directly to main. Use conventional commits. Work in feature branches, and create PRs.
 - Commit and push (to a feature branch and PR) whenever you feel the code is generally functional and tests are green.
+
+## PR and Testing Guidelines
+- Before pushing a new PR, try role playing as a QA engineer first. Be skeptical that the tests cover all the use cases. Consider edge cases, large and small datasets, etc.
+- Focus on happy paths in tests before sad paths.
