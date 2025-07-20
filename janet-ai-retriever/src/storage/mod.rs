@@ -15,7 +15,7 @@ pub struct Chunk {
     pub line_start: usize,
     pub line_end: usize,
     pub content: String,
-    pub embedding: Option<Vec<f32>>,
+    pub embedding: Option<Vec<half::f16>>,
 }
 
 /// Represents a file in the index
@@ -74,22 +74,22 @@ pub trait EmbeddingStore: Send + Sync {
     async fn store_embeddings(
         &self,
         chunk_ids: Vec<ChunkId>,
-        embeddings: Vec<Vec<f32>>,
+        embeddings: Vec<Vec<half::f16>>,
     ) -> Result<()>;
 
     /// Search for similar chunks using vector similarity
     async fn search_similar(
         &self,
-        query: Vec<f32>,
+        query: Vec<half::f16>,
         limit: usize,
-        threshold: Option<f32>,
-    ) -> Result<Vec<(ChunkId, f32)>>;
+        threshold: Option<half::f16>,
+    ) -> Result<Vec<(ChunkId, half::f16)>>;
 
     /// Delete embeddings for specific chunks
     async fn delete_embeddings(&self, chunk_ids: Vec<ChunkId>) -> Result<()>;
 
     /// Get embedding for a specific chunk
-    async fn get_embedding(&self, chunk_id: ChunkId) -> Result<Option<Vec<f32>>>;
+    async fn get_embedding(&self, chunk_id: ChunkId) -> Result<Option<Vec<half::f16>>>;
 }
 
 /// Combined store that implements both chunk storage and embedding search
@@ -98,8 +98,8 @@ pub trait CombinedStore: ChunkStore + EmbeddingStore + Send + Sync {
     /// Search for similar chunks and return full chunk data
     async fn search_chunks(
         &self,
-        query: Vec<f32>,
+        query: Vec<half::f16>,
         limit: usize,
-        threshold: Option<f32>,
-    ) -> Result<Vec<(Chunk, f32)>>;
+        threshold: Option<half::f16>,
+    ) -> Result<Vec<(Chunk, half::f16)>>;
 }

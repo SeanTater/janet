@@ -4,6 +4,8 @@ use super::{
 use crate::retrieval::file_index::{ChunkRef, FileIndex};
 use anyhow::Result;
 use async_trait::async_trait;
+#[allow(unused_imports)]
+use half::f16;
 
 /// Implementation of storage traits for SQLite-based FileIndex
 pub struct SqliteStore {
@@ -133,7 +135,7 @@ impl EmbeddingStore for SqliteStore {
     async fn store_embeddings(
         &self,
         chunk_ids: Vec<ChunkId>,
-        embeddings: Vec<Vec<f32>>,
+        embeddings: Vec<Vec<half::f16>>,
     ) -> Result<()> {
         if chunk_ids.len() != embeddings.len() {
             return Err(anyhow::anyhow!("Chunk IDs and embeddings count mismatch"));
@@ -151,15 +153,15 @@ impl EmbeddingStore for SqliteStore {
 
     async fn search_similar(
         &self,
-        query: Vec<f32>,
+        query: Vec<half::f16>,
         limit: usize,
-        threshold: Option<f32>,
-    ) -> Result<Vec<(ChunkId, f32)>> {
+        threshold: Option<half::f16>,
+    ) -> Result<Vec<(ChunkId, half::f16)>> {
         // Get all chunks with embeddings
         let chunks = self.file_index.get_all_chunks_with_embeddings().await?;
 
         // Calculate cosine similarity for each chunk
-        let mut similarities: Vec<(ChunkId, f32)> = Vec::new();
+        let mut similarities: Vec<(ChunkId, half::f16)> = Vec::new();
 
         for chunk in chunks {
             if let (Some(id), Some(embedding)) = (chunk.id, chunk.embedding) {
@@ -189,35 +191,37 @@ impl EmbeddingStore for SqliteStore {
         self.file_index.delete_embeddings_by_ids(&chunk_ids).await
     }
 
-    async fn get_embedding(&self, chunk_id: ChunkId) -> Result<Option<Vec<f32>>> {
+    async fn get_embedding(&self, chunk_id: ChunkId) -> Result<Option<Vec<half::f16>>> {
         let chunk = self.file_index.get_chunk_by_id(chunk_id).await?;
         Ok(chunk.and_then(|c| c.embedding))
     }
 }
 
 // Helper function for cosine similarity calculation
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+fn cosine_similarity(a: &[half::f16], b: &[half::f16]) -> half::f16 {
     if a.len() != b.len() {
-        return 0.0;
+        return half::f16::ZERO;
     }
 
-    let mut dot_product = 0.0;
-    let mut norm_a = 0.0;
-    let mut norm_b = 0.0;
+    let mut dot_product = 0.0f32;
+    let mut norm_a = 0.0f32;
+    let mut norm_b = 0.0f32;
 
     for i in 0..a.len() {
-        dot_product += a[i] * b[i];
-        norm_a += a[i] * a[i];
-        norm_b += b[i] * b[i];
+        let a_f32 = a[i].to_f32();
+        let b_f32 = b[i].to_f32();
+        dot_product += a_f32 * b_f32;
+        norm_a += a_f32 * a_f32;
+        norm_b += b_f32 * b_f32;
     }
 
     let norm_a = norm_a.sqrt();
     let norm_b = norm_b.sqrt();
 
     if norm_a == 0.0 || norm_b == 0.0 {
-        0.0
+        half::f16::ZERO
     } else {
-        dot_product / (norm_a * norm_b)
+        half::f16::from_f32(dot_product / (norm_a * norm_b))
     }
 }
 
@@ -225,10 +229,10 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 impl CombinedStore for SqliteStore {
     async fn search_chunks(
         &self,
-        query: Vec<f32>,
+        query: Vec<half::f16>,
         limit: usize,
-        threshold: Option<f32>,
-    ) -> Result<Vec<(Chunk, f32)>> {
+        threshold: Option<half::f16>,
+    ) -> Result<Vec<(Chunk, half::f16)>> {
         // Get similar chunk IDs
         let similar_chunks = self.search_similar(query, limit, threshold).await?;
 
@@ -291,17 +295,31 @@ mod tests {
         assert_eq!(chunk_ids.len(), 2);
 
         // Store embeddings
-        let embeddings = vec![vec![0.1, 0.2, 0.3], vec![0.4, 0.5, 0.6]];
+        let embeddings = vec![
+            vec![f16::from_f32(0.1), f16::from_f32(0.2), f16::from_f32(0.3)],
+            vec![f16::from_f32(0.4), f16::from_f32(0.5), f16::from_f32(0.6)],
+        ];
         store
             .store_embeddings(chunk_ids.clone(), embeddings.clone())
             .await?;
 
         // Verify embeddings were stored
         let embedding1 = store.get_embedding(chunk_ids[0]).await?;
-        assert_eq!(embedding1, Some(vec![0.1, 0.2, 0.3]));
+        assert_eq!(
+            embedding1,
+            Some(vec![
+                f16::from_f32(0.1),
+                f16::from_f32(0.2),
+                f16::from_f32(0.3)
+            ])
+        );
 
         // Test similarity search
-        let query = vec![0.15, 0.25, 0.35];
+        let query = vec![
+            f16::from_f32(0.15),
+            f16::from_f32(0.25),
+            f16::from_f32(0.35),
+        ];
         let results = store.search_similar(query, 10, None).await?;
         assert_eq!(results.len(), 2);
         // First result should be the more similar one
@@ -310,13 +328,17 @@ mod tests {
 
         // Test with threshold
         // First, let's check what the actual similarities are
-        let query_for_threshold = vec![0.15, 0.25, 0.35];
+        let query_for_threshold = vec![
+            f16::from_f32(0.15),
+            f16::from_f32(0.25),
+            f16::from_f32(0.35),
+        ];
         let all_results = store
             .search_similar(query_for_threshold.clone(), 10, None)
             .await?;
 
         // Use a threshold that will filter out at least one result
-        let threshold = (all_results[0].1 + all_results[1].1) / 2.0; // midpoint between top two
+        let threshold = (all_results[0].1 + all_results[1].1) / f16::from_f32(2.0); // midpoint between top two
         let results_with_threshold = store
             .search_similar(query_for_threshold, 10, Some(threshold))
             .await?;
@@ -333,34 +355,34 @@ mod tests {
     #[test]
     fn test_cosine_similarity() {
         // Test identical vectors
-        let a = vec![1.0, 0.0, 0.0];
-        let b = vec![1.0, 0.0, 0.0];
-        assert_eq!(cosine_similarity(&a, &b), 1.0);
+        let a = vec![f16::from_f32(1.0), f16::from_f32(0.0), f16::from_f32(0.0)];
+        let b = vec![f16::from_f32(1.0), f16::from_f32(0.0), f16::from_f32(0.0)];
+        assert_eq!(cosine_similarity(&a, &b), f16::from_f32(1.0));
 
         // Test orthogonal vectors
-        let a = vec![1.0, 0.0];
-        let b = vec![0.0, 1.0];
-        assert_eq!(cosine_similarity(&a, &b), 0.0);
+        let a = vec![f16::from_f32(1.0), f16::from_f32(0.0)];
+        let b = vec![f16::from_f32(0.0), f16::from_f32(1.0)];
+        assert_eq!(cosine_similarity(&a, &b), f16::ZERO);
 
         // Test opposite vectors
-        let a = vec![1.0, 0.0];
-        let b = vec![-1.0, 0.0];
-        assert_eq!(cosine_similarity(&a, &b), -1.0);
+        let a = vec![f16::from_f32(1.0), f16::from_f32(0.0)];
+        let b = vec![f16::from_f32(-1.0), f16::from_f32(0.0)];
+        assert_eq!(cosine_similarity(&a, &b), f16::from_f32(-1.0));
 
         // Test normalized vectors
-        let a = vec![0.6, 0.8];
-        let b = vec![0.8, 0.6];
+        let a = vec![f16::from_f32(0.6), f16::from_f32(0.8)];
+        let b = vec![f16::from_f32(0.8), f16::from_f32(0.6)];
         let similarity = cosine_similarity(&a, &b);
-        assert!((similarity - 0.96).abs() < 0.01);
+        assert!((similarity.to_f32() - 0.96).abs() < 0.01);
 
         // Test zero vectors
-        let a = vec![0.0, 0.0];
-        let b = vec![1.0, 1.0];
-        assert_eq!(cosine_similarity(&a, &b), 0.0);
+        let a = vec![f16::ZERO, f16::ZERO];
+        let b = vec![f16::from_f32(1.0), f16::from_f32(1.0)];
+        assert_eq!(cosine_similarity(&a, &b), f16::ZERO);
 
         // Test different length vectors
-        let a = vec![1.0, 2.0];
-        let b = vec![1.0, 2.0, 3.0];
-        assert_eq!(cosine_similarity(&a, &b), 0.0);
+        let a = vec![f16::from_f32(1.0), f16::from_f32(2.0)];
+        let b = vec![f16::from_f32(1.0), f16::from_f32(2.0), f16::from_f32(3.0)];
+        assert_eq!(cosine_similarity(&a, &b), f16::ZERO);
     }
 }
