@@ -1,19 +1,6 @@
 use anyhow::Result;
-use janet_ai_context::create_builder_for_path;
+use janet_ai_context::{create_builder_for_path, TextChunk};
 use std::path::Path;
-
-/// A chunk of text that owns its data (no lifetimes)
-#[derive(Debug, Clone)]
-pub struct OwnedTextChunk {
-    /// The name of the repository the file belongs to
-    pub repo: String,
-    /// The path to the file within the repository
-    pub path: String,
-    /// The sequence number of this chunk within the file (0-indexed)
-    pub sequence: usize,
-    /// The text content of this specific chunk
-    pub chunk_text: String,
-}
 
 /// Configuration for chunking files
 #[derive(Debug, Clone)]
@@ -64,7 +51,7 @@ impl ChunkingStrategy {
         &self,
         file_path: &Path,
         content: &str,
-    ) -> Result<Vec<OwnedTextChunk>> {
+    ) -> Result<Vec<TextChunk>> {
         // Use janet-ai-context to create the appropriate builder for this file type
         let builder = create_builder_for_path(
             self.config.repo_name.clone(),
@@ -72,27 +59,16 @@ impl ChunkingStrategy {
             Some(self.config.max_chunk_size),
         );
         
-        let text_chunks = builder.get_chunks(content);
-        
-        // Convert borrowed TextChunks to owned OwnedTextChunks
-        let owned_chunks: Vec<OwnedTextChunk> = text_chunks
-            .into_iter()
-            .map(|chunk| OwnedTextChunk {
-                repo: chunk.repo.to_string(),
-                path: chunk.path.to_string(),
-                sequence: chunk.sequence,
-                chunk_text: chunk.chunk_text.to_string(),
-            })
-            .collect();
+        let chunks = builder.get_chunks(content);
         
         tracing::debug!(
             "Chunked {} into {} chunks (max size: {})",
             file_path.display(),
-            owned_chunks.len(),
+            chunks.len(),
             self.config.max_chunk_size
         );
         
-        Ok(owned_chunks)
+        Ok(chunks)
     }
     
     /// Check if a file should be indexed based on its path
@@ -172,7 +148,7 @@ fn main() {
         assert_eq!(chunks[0].path, "src/main.rs");
         
         // Verify that all chunks combined reconstruct the original content
-        let reconstructed: String = chunks.iter().map(|c| c.chunk_text.clone()).collect();
+        let reconstructed: String = chunks.iter().map(|c| c.chunk_text.as_str()).collect();
         assert_eq!(reconstructed, rust_content);
     }
     

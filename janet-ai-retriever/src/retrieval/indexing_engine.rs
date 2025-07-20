@@ -108,7 +108,6 @@ impl IndexingEngine {
     }
     
     /// Create a new indexing engine with in-memory database (for testing)
-    #[cfg(test)]
     pub async fn new_memory(config: IndexingEngineConfig) -> Result<Self> {
         Self::new_impl(config, true).await
     }
@@ -118,14 +117,7 @@ impl IndexingEngine {
         
         // Initialize enhanced file index
         let enhanced_index = if use_memory {
-            #[cfg(test)]
-            {
-                EnhancedFileIndex::open_memory(&config.base_path).await?
-            }
-            #[cfg(not(test))]
-            {
-                unreachable!("Memory mode only available in tests")
-            }
+            EnhancedFileIndex::open_memory(&config.base_path).await?
         } else {
             EnhancedFileIndex::open(&config.base_path).await?
         };
@@ -214,7 +206,11 @@ impl IndexingEngine {
     }
     
     /// Process tasks from the queue (simplified single-threaded version)
+    /// Processes all currently pending tasks, with a safety limit to prevent hanging
     pub async fn process_pending_tasks(&self) -> Result<()> {
+        let max_tasks_per_batch = 100; // Safety limit to prevent infinite loops
+        let mut tasks_processed = 0;
+        
         while let Some(task) = self.task_queue.pop_task().await {
             let result = self.process_task_internal(&task).await;
             
@@ -236,8 +232,15 @@ impl IndexingEngine {
                     stats_guard.errors += 1;
                 }
             }
+            
+            tasks_processed += 1;
+            if tasks_processed >= max_tasks_per_batch {
+                debug!("Reached max tasks per batch ({}), stopping to prevent hanging", max_tasks_per_batch);
+                break;
+            }
         }
         
+        debug!("Processed {} tasks in this batch", tasks_processed);
         Ok(())
     }
     
@@ -301,9 +304,9 @@ impl IndexingEngine {
         enhanced_index.upsert_file(&file_ref).await?;
         
         // Chunk the content using janet-ai-context
-        let owned_chunks = chunking_strategy.chunk_content(file_path, &content)?;
+        let chunks = chunking_strategy.chunk_content(file_path, &content)?;
         
-        if owned_chunks.is_empty() {
+        if chunks.is_empty() {
             return Ok(FileProcessingResult {
                 file_path: file_path.to_path_buf(),
                 chunks_created: 0,
@@ -312,16 +315,16 @@ impl IndexingEngine {
             });
         }
         
-        // Convert OwnedTextChunk to ChunkRef
-        let mut chunk_refs: Vec<ChunkRef> = owned_chunks
+        // Convert TextChunk to ChunkRef
+        let mut chunk_refs: Vec<ChunkRef> = chunks
             .into_iter()
-            .map(|owned_chunk| ChunkRef {
+            .map(|chunk| ChunkRef {
                 id: None,
                 file_hash,
-                relative_path: owned_chunk.path,
-                line_start: owned_chunk.sequence * 10, // Simple line numbering based on sequence
-                line_end: (owned_chunk.sequence + 1) * 10,
-                content: owned_chunk.chunk_text,
+                relative_path: chunk.path,
+                line_start: chunk.sequence * 10, // Simple line numbering based on sequence
+                line_end: (chunk.sequence + 1) * 10,
+                content: chunk.chunk_text,
                 embedding: None,
             })
             .collect();
@@ -466,22 +469,38 @@ impl IndexingEngine {
         self.enhanced_index.get_index_stats().await
     }
     
+    /// Get the current task queue size
+    pub async fn get_queue_size(&self) -> usize {
+        self.task_queue.queue_size().await
+    }
+    
+    /// Get a reference to the enhanced file index for searching
+    pub fn get_enhanced_index(&self) -> &EnhancedFileIndex {
+        &self.enhanced_index
+    }
+    
     /// Shutdown the indexing engine
     pub async fn shutdown(&mut self) -> Result<()> {
         info!("Shutting down IndexingEngine");
         
-        // Send shutdown signal to workers
-        if let Some(sender) = self.shutdown_sender.take() {
-            let _ = sender.send(());
+        // Only shutdown workers and queue if indexing was enabled
+        if self.config.mode.allows_indexing() {
+            // Send shutdown signal to workers
+            if let Some(sender) = self.shutdown_sender.take() {
+                let _ = sender.send(());
+            }
+            
+            // Wait for workers to finish
+            for worker in self.workers.drain(..) {
+                let _ = worker.await;
+            }
+            
+            // Shutdown task queue
+            self.task_queue.shutdown().await;
+        } else {
+            // In read-only mode, just clear any shutdown sender
+            self.shutdown_sender.take();
         }
-        
-        // Wait for workers to finish
-        for worker in self.workers.drain(..) {
-            let _ = worker.await;
-        }
-        
-        // Shutdown task queue
-        self.task_queue.shutdown().await;
         
         info!("IndexingEngine shutdown complete");
         Ok(())

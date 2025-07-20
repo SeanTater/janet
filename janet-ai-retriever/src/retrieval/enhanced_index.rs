@@ -142,7 +142,6 @@ impl EnhancedFileIndex {
     }
     
     /// Create a new enhanced file index using in-memory database (for testing)
-    #[cfg(test)]
     pub async fn open_memory(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open_memory(base).await?;
         let pool = file_index.pool().clone();
@@ -470,6 +469,59 @@ impl EnhancedFileIndex {
         Ok(result.rows_affected() as usize)
     }
     
+    /// Search for similar chunks using embedding similarity
+    pub async fn search_similar_chunks(&self, query_embedding: &[half::f16], limit: usize) -> Result<Vec<ChunkRef>> {
+        // For now, implement a simple cosine similarity search in Rust
+        // In a production system, you might want to use a vector database
+        
+        let rows = sqlx::query(
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
+             FROM chunks WHERE embedding IS NOT NULL ORDER BY id"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let mut similarities: Vec<(f32, ChunkRef)> = Vec::new();
+        
+        for row in rows {
+            let id: i64 = row.get("id");
+            let file_hash_bytes: Vec<u8> = row.get("file_hash");
+            let relative_path: String = row.get("relative_path");
+            let line_start: i64 = row.get("line_start");
+            let line_end: i64 = row.get("line_end");
+            let content: String = row.get("content");
+            let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
+            
+            if let Some(embedding_bytes) = embedding_bytes {
+                let chunk_embedding: Vec<half::f16> = bytemuck::cast_slice::<u8, half::f16>(&embedding_bytes).to_vec();
+                
+                // Calculate cosine similarity
+                let similarity = calculate_cosine_similarity(query_embedding, &chunk_embedding);
+                
+                let mut file_hash = [0u8; 32];
+                file_hash.copy_from_slice(&file_hash_bytes[..32]);
+                
+                let chunk_ref = ChunkRef {
+                    id: Some(id),
+                    file_hash,
+                    relative_path,
+                    line_start: line_start as usize,
+                    line_end: line_end as usize,
+                    content,
+                    embedding: Some(chunk_embedding),
+                };
+                
+                similarities.push((similarity, chunk_ref));
+            }
+        }
+        
+        // Sort by similarity (descending) and take the top results
+        similarities.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        similarities.truncate(limit);
+        
+        Ok(similarities.into_iter().map(|(_, chunk)| chunk).collect())
+    }
+
     /// Get statistics about the index
     pub async fn get_index_stats(&self) -> Result<IndexStats> {
         let files_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM files")
@@ -495,6 +547,27 @@ impl EnhancedFileIndex {
             models_count: models_count as usize,
         })
     }
+}
+
+/// Calculate cosine similarity between two f16 embedding vectors
+fn calculate_cosine_similarity(a: &[half::f16], b: &[half::f16]) -> f32 {
+    if a.len() != b.len() {
+        return 0.0;
+    }
+
+    let dot_product: f32 = a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| f32::from(*x) * f32::from(*y))
+        .sum();
+
+    let norm_a: f32 = a.iter().map(|x| f32::from(*x).powi(2)).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| f32::from(*x).powi(2)).sum::<f32>().sqrt();
+
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+
+    dot_product / (norm_a * norm_b)
 }
 
 /// Statistics about the index
