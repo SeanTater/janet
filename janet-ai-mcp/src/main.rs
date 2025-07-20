@@ -20,18 +20,6 @@ async fn main() -> Result<()> {
                 .help("Root directory to search")
                 .value_parser(clap::value_parser!(PathBuf)),
         )
-        .arg(
-            Arg::new("no-semantic")
-                .long("no-semantic")
-                .help("Disable semantic search functionality")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("enable-delegate")
-                .long("enable-delegate")
-                .help("Enable delegate search with LLM validation")
-                .action(clap::ArgAction::SetTrue),
-        )
         .get_matches();
 
     // Build configuration from CLI arguments
@@ -40,9 +28,6 @@ async fn main() -> Result<()> {
     if let Some(root_dir) = matches.get_one::<PathBuf>("root") {
         config.root_dir = root_dir.clone();
     }
-
-    config.enable_semantic_search = !matches.get_flag("no-semantic");
-    config.enable_delegate_search = matches.get_flag("enable-delegate");
 
     // Run the server
     run_server(config).await

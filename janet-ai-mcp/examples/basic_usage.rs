@@ -10,8 +10,6 @@ async fn main() -> Result<()> {
     // Configure the server
     let config = ServerConfig {
         root_dir: PathBuf::from("."),
-        enable_semantic_search: true,
-        enable_delegate_search: false,
     };
 
     // Run the MCP server

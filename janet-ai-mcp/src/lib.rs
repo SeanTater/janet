@@ -18,18 +18,12 @@ use tracing::info;
 pub struct ServerConfig {
     /// Root directory to search for files
     pub root_dir: PathBuf,
-    /// Enable semantic search functionality
-    pub enable_semantic_search: bool,
-    /// Enable delegate search with LLM validation
-    pub enable_delegate_search: bool,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             root_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            enable_semantic_search: true,
-            enable_delegate_search: false, // Requires LLM integration
         }
     }
 }
