@@ -6,6 +6,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 #[allow(unused_imports)]
 use half::f16;
+use sqlx::Row;
 
 /// Implementation of storage traits for SQLite-based FileIndex
 pub struct SqliteStore {
@@ -127,6 +128,66 @@ impl ChunkStore for SqliteStore {
             .into_iter()
             .map(Self::chunk_ref_to_chunk)
             .collect())
+    }
+
+    async fn search_text(&self, search_term: &str, case_sensitive: bool) -> Result<Vec<Chunk>> {
+        let pool = self.file_index.pool();
+
+        // Escape special SQL characters in the search term
+        let escaped_term = search_term.replace('%', "\\%").replace('_', "\\_");
+        let like_pattern = format!("%{escaped_term}%");
+
+        let query = if case_sensitive {
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
+             FROM chunks
+             WHERE content LIKE ? ESCAPE '\\'
+             ORDER BY relative_path, line_start"
+        } else {
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
+             FROM chunks
+             WHERE content LIKE ? COLLATE NOCASE ESCAPE '\\'
+             ORDER BY relative_path, line_start"
+        };
+
+        let rows = sqlx::query(query)
+            .bind(&like_pattern)
+            .fetch_all(pool)
+            .await?;
+
+        let mut chunks = Vec::new();
+        for row in rows {
+            let id: Option<i64> = row.get("id");
+            let file_hash: Vec<u8> = row.get("file_hash");
+            let relative_path: String = row.get("relative_path");
+            let line_start: i64 = row.get("line_start");
+            let line_end: i64 = row.get("line_end");
+            let content: String = row.get("content");
+            let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
+
+            // Convert file_hash Vec<u8> to [u8; 32]
+            let mut hash_array = [0u8; 32];
+            if file_hash.len() == 32 {
+                hash_array.copy_from_slice(&file_hash);
+            }
+
+            // Convert embedding bytes to f16 vector if present
+            let embedding = embedding_bytes
+                .map(|bytes| bytemuck::cast_slice::<u8, half::f16>(&bytes[..]).to_vec());
+
+            let chunk = Chunk {
+                id,
+                file_hash: hash_array,
+                relative_path,
+                line_start: line_start as usize,
+                line_end: line_end as usize,
+                content,
+                embedding,
+            };
+
+            chunks.push(chunk);
+        }
+
+        Ok(chunks)
     }
 }
 

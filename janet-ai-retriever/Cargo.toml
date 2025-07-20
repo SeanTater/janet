@@ -9,12 +9,14 @@ anyhow = "1.0.97"
 async-trait = "0.1.88"
 blake3 = "1.7.0"
 bytemuck = "1.14.0"
+chrono = { version = "0.4.38", features = ["serde"] }
 clap = { version = "4.5.4", features = ["derive"] }
 half = { version = "2.4.1", features = ["bytemuck"] }
 futures = "0.3.31"
 hex = "0.4"
 ignore = "0.4.23"
 itertools = "0.14.0"
+janet-ai-context = { path = "../janet-ai-context" }
 janet-ai-embed = { path = "../janet-ai-embed" }
 notify = "8.0.0"
 notify-debouncer-mini = "0.6.0"

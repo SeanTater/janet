@@ -45,7 +45,6 @@ impl FileIndex {
         Self::new_with_pool(base, pool).await
     }
 
-    #[cfg(test)]
     pub async fn open_memory(base: &Path) -> Result<Self> {
         let pool = SqlitePool::connect("sqlite::memory:").await?;
         Self::new_with_pool(base, pool).await
@@ -423,6 +422,11 @@ impl FileIndex {
             });
         }
         Ok(chunks)
+    }
+
+    /// Get the underlying SQLite connection pool
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
     }
 }
 
