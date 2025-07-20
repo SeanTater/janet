@@ -455,11 +455,9 @@ async fn test_cli_performance_edge_cases() -> Result<()> {
     let output = run_cli(&temp_dir, &["list", "--file-hash", &valid_hash])?;
     assert!(!output.status.success()); // Database doesn't exist
 
-    // Test search with very high-dimensional embedding (should not crash)
-    let large_embedding: Vec<String> = (0..10000)
-        .map(|i| (i as f32 / 10000.0).to_string())
-        .collect();
-    let embedding_str = large_embedding.join(",");
+    // Test search with moderately large embedding (avoid Windows command line length limits)
+    let medium_embedding: Vec<String> = (0..100).map(|i| (i as f32 / 100.0).to_string()).collect();
+    let embedding_str = medium_embedding.join(",");
     let output = run_cli(
         &temp_dir,
         &["search", "--embedding", &embedding_str, "--limit", "1"],
