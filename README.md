@@ -13,7 +13,7 @@ Janet is a Rust workspace containing two complementary crates for semantic code 
 
 ### janet-context
 - 🧩 **Smart Text Chunking**: Breaks code into semantic chunks while preserving metadata
-- 📝 **Configurable Delimiters**: Customizable regex patterns for different content types  
+- 📝 **Configurable Delimiters**: Customizable regex patterns for different content types
 - 🏷️ **Rich Metadata**: Each chunk includes repository, file path, and position information
 - 🖥️ **CLI Tool**: Process files directly from command line with JSON output
 - 🔄 **Content Reconstruction**: Guarantees original content can be rebuilt from chunks
@@ -25,6 +25,7 @@ Janet is a Rust workspace containing two complementary crates for semantic code 
 - 🎯 **File Watching**: Real-time monitoring of code changes with debouncing
 - 🏗️ **Modular Architecture**: Clean traits for storage backends and analysis engines
 - 🧪 **Comprehensive Testing**: Memory-based testing with 100% async coverage
+- 🖥️ **Interactive CLI**: Manage chunk databases with search, statistics, and data inspection
 
 ## Getting Started
 
@@ -49,7 +50,7 @@ use janet_context::text::{TextContextBuilder, DEFAULT_MARKDOWN_DELIMITERS};
 
 let builder = TextContextBuilder::new(
     "my_project".to_string(),
-    "src/main.rs".to_string(), 
+    "src/main.rs".to_string(),
     &DEFAULT_MARKDOWN_DELIMITERS,
     500  // max chunk size
 );
@@ -76,6 +77,59 @@ let file_ref = FileRef {
 
 index.upsert_file(&file_ref).await?;
 ```
+
+## CLI Tools
+
+### janet-ai-context-cli
+
+Process text files into structured JSON chunks:
+
+```bash
+# Process a file
+cargo run -p janet-ai-context --bin janet-ai-context-cli -- -i src/main.rs -r my_project -p src/main.rs
+
+# Process from stdin
+echo "fn main() {}" | cargo run -p janet-ai-context --bin janet-ai-context-cli -- -r my_project -p stdin
+```
+
+### janet-ai-retriever
+
+Interact with the chunk database:
+
+```bash
+# Initialize a new database
+cargo run -p janet-ai-retriever -- init
+
+# List all chunks
+cargo run -p janet-ai-retriever -- list
+
+# Get detailed chunk information
+cargo run -p janet-ai-retriever -- get 123
+
+# Search similar chunks (if embeddings are available)
+cargo run -p janet-ai-retriever -- search --embedding 0.1,0.2,0.3 --limit 5
+
+# Show database statistics
+cargo run -p janet-ai-retriever -- stats
+
+# Get help for any command
+cargo run -p janet-ai-retriever -- --help
+```
+
+#### Available Commands
+
+- **`init`**: Initialize the chunk database in `.code-assistant/index.db`
+- **`list`**: List chunks with optional filtering by file hash
+- **`get <id>`**: Retrieve a specific chunk by its database ID
+- **`search`**: Find similar chunks using cosine similarity on embeddings
+- **`stats`**: Display database statistics including chunk counts and file coverage
+
+#### Output Formats
+
+Most commands support multiple output formats via the `--format` flag:
+- **`summary`**: Human-readable overview (default)
+- **`full`**: Complete chunk details including content
+- **`json`**: Machine-readable JSON for integration
 
 ## Architecture
 
@@ -130,7 +184,7 @@ janet/
 # Run all tests
 cargo test
 
-# Run specific crate tests  
+# Run specific crate tests
 cargo test -p janet-context
 cargo test -p janet-retriever
 
@@ -145,7 +199,7 @@ See [CLAUDE.md](./CLAUDE.md) for comprehensive development commands and architec
 ## Roadmap
 
 - 🔮 **Vector Similarity Search**: In-memory cosine similarity for semantic search
-- 🔌 **Embedding Providers**: Support for OpenAI, BGE, and local models  
+- 🔌 **Embedding Providers**: Support for OpenAI, BGE, and local models
 - 🚀 **Performance Optimization**: Batch operations and connection pooling
 - 📊 **Metrics & Monitoring**: Comprehensive observability
 - 🔗 **API Server**: REST/GraphQL interface for external integrations

@@ -35,7 +35,7 @@ pub struct ChunkFilter {
 }
 
 /// Metadata about a chunk (without the full content)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ChunkMetadata {
     pub id: ChunkId,
     pub file_hash: FileHash,

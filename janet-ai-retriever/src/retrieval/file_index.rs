@@ -298,7 +298,7 @@ impl FileIndex {
     /// Get all chunks with embeddings
     pub async fn get_all_chunks_with_embeddings(&self) -> Result<Vec<ChunkRef>> {
         let rows = sqlx::query(
-            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
              FROM chunks WHERE embedding IS NOT NULL",
         )
         .fetch_all(&self.pool)
@@ -341,7 +341,7 @@ impl FileIndex {
             .map(|e| bytemuck::cast_slice::<f32, u8>(e));
 
         sqlx::query(
-            "UPDATE chunks SET file_hash = ?1, relative_path = ?2, line_start = ?3, 
+            "UPDATE chunks SET file_hash = ?1, relative_path = ?2, line_start = ?3,
              line_end = ?4, content = ?5, embedding = ?6 WHERE id = ?7",
         )
         .bind(&chunk.file_hash[..])
@@ -382,21 +382,41 @@ impl FileIndex {
         Ok(())
     }
 
-    /// Generic get method for backward compatibility
-    pub async fn get<T>(&self, _table: &str, _key: &[u8]) -> Result<Option<T>> {
-        // This is a simplified version - the original used bincode serialization
-        // For a proper implementation, we'd need to know the type T and have appropriate queries
-        unimplemented!("Generic get method needs specific type handling")
-    }
+    /// Get all chunks in the database
+    pub async fn get_all_chunks(&self) -> Result<Vec<ChunkRef>> {
+        let rows = sqlx::query(
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding FROM chunks ORDER BY relative_path, line_start",
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
-    /// Generic upsert method for backward compatibility  
-    pub async fn upsert<T, F>(&self, _table: &str, _key: &[u8], _merge: F) -> Result<Option<T>>
-    where
-        F: Fn(Option<T>) -> Option<T>,
-    {
-        // This is a simplified version - the original used bincode serialization
-        // For a proper implementation, we'd need to know the type T and have appropriate queries
-        unimplemented!("Generic upsert method needs specific type handling")
+        let mut chunks = Vec::new();
+        for row in rows {
+            let id: i64 = row.get("id");
+            let file_hash_bytes: Vec<u8> = row.get("file_hash");
+            let relative_path: String = row.get("relative_path");
+            let line_start: i64 = row.get("line_start");
+            let line_end: i64 = row.get("line_end");
+            let content: String = row.get("content");
+            let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
+
+            let mut file_hash = [0u8; 32];
+            file_hash.copy_from_slice(&file_hash_bytes[..32]);
+
+            let embedding =
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
+
+            chunks.push(ChunkRef {
+                id: Some(id),
+                file_hash,
+                relative_path,
+                line_start: line_start as usize,
+                line_end: line_end as usize,
+                content,
+                embedding,
+            });
+        }
+        Ok(chunks)
     }
 }
 
