@@ -54,9 +54,15 @@ impl ModelDownloader {
 
     /// Check if the model is completely downloaded
     async fn is_model_complete(&self, config: &EmbedConfig) -> Result<bool> {
+        let model_dir = config.model_path();
+        let onnx_dir = model_dir.join("onnx");
         let tokenizer_config = &config.tokenizer_config;
+
+        // Check for the specific ONNX file we download (model_q4.onnx)
+        let onnx_file = onnx_dir.join("model_q4.onnx");
+
         let required_files = [
-            config.onnx_model_path(),
+            onnx_file,
             tokenizer_config.tokenizer_path.clone(),
             tokenizer_config.config_path.clone(),
             tokenizer_config.special_tokens_map_path.clone(),
