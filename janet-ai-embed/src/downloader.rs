@@ -27,16 +27,16 @@ impl ModelDownloader {
         }
 
         let model_dir = config.model_path();
-        
+
         // Check if model is already downloaded
         if self.is_model_complete(&config).await? {
             tracing::info!("Model {} already exists and is complete", config.model_name);
             return Ok(());
         }
 
-        let repo_id = config.hf_repo().ok_or_else(|| {
-            EmbedError::invalid_config("HuggingFace repository not specified")
-        })?;
+        let repo_id = config
+            .hf_repo()
+            .ok_or_else(|| EmbedError::invalid_config("HuggingFace repository not specified"))?;
 
         tracing::info!("Downloading model {} from {}", config.model_name, repo_id);
 
@@ -76,7 +76,7 @@ impl ModelDownloader {
     async fn download_model_files(&self, repo: &ApiRepo, config: &EmbedConfig) -> Result<()> {
         let model_dir = config.model_path();
         let onnx_dir = model_dir.join("onnx");
-        
+
         // Create subdirectories
         fs::create_dir_all(&onnx_dir).await?;
 
@@ -85,8 +85,14 @@ impl ModelDownloader {
             ("onnx/model_q4.onnx", onnx_dir.join("model_q4.onnx")),
             ("tokenizer.json", model_dir.join("tokenizer.json")),
             ("config.json", model_dir.join("config.json")),
-            ("special_tokens_map.json", model_dir.join("special_tokens_map.json")),
-            ("tokenizer_config.json", model_dir.join("tokenizer_config.json")),
+            (
+                "special_tokens_map.json",
+                model_dir.join("special_tokens_map.json"),
+            ),
+            (
+                "tokenizer_config.json",
+                model_dir.join("tokenizer_config.json"),
+            ),
         ];
 
         for (remote_path, local_path) in &downloads {
@@ -96,13 +102,13 @@ impl ModelDownloader {
             }
 
             tracing::info!("Downloading {} to {}", remote_path, local_path.display());
-            
+
             match repo.get(remote_path).await {
                 Ok(file_path) => {
                     // Copy the downloaded file to our model directory
-                    fs::copy(&file_path, local_path).await.map_err(|e| {
-                        EmbedError::Io { source: e }
-                    })?;
+                    fs::copy(&file_path, local_path)
+                        .await
+                        .map_err(|e| EmbedError::Io { source: e })?;
                     tracing::debug!("Successfully downloaded {}", remote_path);
                 }
                 Err(e) => {
@@ -113,7 +119,9 @@ impl ModelDownloader {
                         self.create_fallback_special_tokens_map(local_path).await?;
                     } else if *remote_path == "tokenizer_config.json" {
                         // tokenizer_config.json is optional - we handle this in the provider
-                        tracing::info!("tokenizer_config.json not found, will generate minimal config");
+                        tracing::info!(
+                            "tokenizer_config.json not found, will generate minimal config"
+                        );
                         continue;
                     } else {
                         return Err(EmbedError::External { source: e.into() });

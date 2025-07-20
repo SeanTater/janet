@@ -4,7 +4,9 @@ use crate::config::EmbedConfig;
 use crate::downloader::ModelDownloader;
 use crate::error::{EmbedError, Result};
 use async_trait::async_trait;
-use fastembed::{EmbeddingModel, InitOptions, TextEmbedding, TokenizerFiles, UserDefinedEmbeddingModel};
+use fastembed::{
+    EmbeddingModel, InitOptions, TextEmbedding, TokenizerFiles, UserDefinedEmbeddingModel,
+};
 use half::f16;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -41,7 +43,8 @@ impl EmbeddingResult {
 }
 
 /// Global cache for initialized embedding models to avoid reloading
-static MODEL_CACHE: OnceLock<Mutex<HashMap<String, (Arc<Mutex<TextEmbedding>>, usize)>>> = OnceLock::new();
+static MODEL_CACHE: OnceLock<Mutex<HashMap<String, (Arc<Mutex<TextEmbedding>>, usize)>>> =
+    OnceLock::new();
 
 /// Get the global model cache
 fn get_model_cache() -> &'static Mutex<HashMap<String, (Arc<Mutex<TextEmbedding>>, usize)>> {
@@ -83,11 +86,14 @@ impl FastEmbedProvider {
 
     /// Initialize the provider by downloading and loading the model
     pub async fn initialize(&mut self) -> Result<()> {
-        tracing::info!("Initializing FastEmbed provider for model: {}", self.config.model_name);
+        tracing::info!(
+            "Initializing FastEmbed provider for model: {}",
+            self.config.model_name
+        );
 
         // Create a cache key based on the model configuration
         let cache_key = self.create_cache_key();
-        
+
         // Check if model is already cached
         {
             let cache = get_model_cache().lock().unwrap();
@@ -104,11 +110,11 @@ impl FastEmbedProvider {
             tracing::info!("Downloading HuggingFace model: {}", self.config.model_name);
             let downloader = ModelDownloader::new();
             downloader.ensure_model(&self.config).await?;
-            
+
             // Try to load the user-defined model
             let (model, dimension) = self.load_user_defined_model().await?;
             let model_arc = Arc::new(Mutex::new(model));
-            
+
             // Cache the model
             {
                 let mut cache = get_model_cache().lock().unwrap();
@@ -122,28 +128,29 @@ impl FastEmbedProvider {
 
             // Load model in a blocking task
             let config = self.config.clone();
-            let (model, dimension) = tokio::task::spawn_blocking(move || -> Result<(TextEmbedding, usize)> {
-                tracing::info!("Loading embedding model: {}", config.model_name);
+            let (model, dimension) =
+                tokio::task::spawn_blocking(move || -> Result<(TextEmbedding, usize)> {
+                    tracing::info!("Loading embedding model: {}", config.model_name);
 
-                let init_options = InitOptions::new(EmbeddingModel::AllMiniLML6V2)
-                    .with_show_download_progress(true);
+                    let init_options = InitOptions::new(EmbeddingModel::AllMiniLML6V2)
+                        .with_show_download_progress(true);
 
-                let mut model = TextEmbedding::try_new(init_options)
-                    .map_err(|e| EmbedError::External { source: e.into() })?;
+                    let mut model = TextEmbedding::try_new(init_options)
+                        .map_err(|e| EmbedError::External { source: e.into() })?;
 
-                // Get dimension by generating a test embedding
-                let test_embeddings = model.embed(vec!["test".to_string()], None)
-                    .map_err(|e| EmbedError::External { source: e.into() })?;
-                let dimension = test_embeddings.first()
-                    .map(|emb| emb.len())
-                    .unwrap_or(384);
+                    // Get dimension by generating a test embedding
+                    let test_embeddings = model
+                        .embed(vec!["test".to_string()], None)
+                        .map_err(|e| EmbedError::External { source: e.into() })?;
+                    let dimension = test_embeddings.first().map(|emb| emb.len()).unwrap_or(384);
 
-                tracing::info!("Model loaded successfully. Dimension: {}", dimension);
-                Ok((model, dimension))
-            }).await??;
+                    tracing::info!("Model loaded successfully. Dimension: {}", dimension);
+                    Ok((model, dimension))
+                })
+                .await??;
 
             let model_arc = Arc::new(Mutex::new(model));
-            
+
             // Cache the model
             {
                 let mut cache = get_model_cache().lock().unwrap();
@@ -153,7 +160,7 @@ impl FastEmbedProvider {
             self.model = Some(model_arc);
             self.dimension = dimension;
         }
-        
+
         // Validate the model works correctly
         self.validate_model().await
     }
@@ -167,11 +174,13 @@ impl FastEmbedProvider {
 
     /// Create a cache key based on the model configuration
     fn create_cache_key(&self) -> String {
-        format!("{}:{}:{}:{}",
-                self.config.model_name,
-                self.config.batch_size,
-                self.config.normalize,
-                self.config.hf_revision())
+        format!(
+            "{}:{}:{}:{}",
+            self.config.model_name,
+            self.config.batch_size,
+            self.config.normalize,
+            self.config.hf_revision()
+        )
     }
 
     /// Load a user-defined ONNX model from downloaded HuggingFace files
@@ -179,22 +188,27 @@ impl FastEmbedProvider {
         tracing::info!("Loading user-defined model: {}", self.config.model_name);
 
         // Read all required files
-        let onnx_file = fs::read(self.config.onnx_model_path()).await
+        let onnx_file = fs::read(self.config.onnx_model_path())
+            .await
             .map_err(|e| EmbedError::Io { source: e })?;
-        
-        let tokenizer_file = fs::read(self.config.tokenizer_path()).await
+
+        let tokenizer_file = fs::read(self.config.tokenizer_path())
+            .await
             .map_err(|e| EmbedError::Io { source: e })?;
-        
-        let config_file = fs::read(self.config.config_path()).await
+
+        let config_file = fs::read(self.config.config_path())
+            .await
             .map_err(|e| EmbedError::Io { source: e })?;
-        
-        let special_tokens_map_file = fs::read(self.config.special_tokens_map_path()).await
+
+        let special_tokens_map_file = fs::read(self.config.special_tokens_map_path())
+            .await
             .map_err(|e| EmbedError::Io { source: e })?;
 
         // Check if tokenizer_config.json exists, create a minimal one if not
         let tokenizer_config_path = self.config.model_path().join("tokenizer_config.json");
         let tokenizer_config_file = if tokenizer_config_path.exists() {
-            fs::read(&tokenizer_config_path).await
+            fs::read(&tokenizer_config_path)
+                .await
                 .map_err(|e| EmbedError::Io { source: e })?
         } else {
             // Create a minimal tokenizer config
@@ -221,63 +235,78 @@ impl FastEmbedProvider {
 
         // Load the model in a blocking task
         let config_name = self.config.model_name.clone();
-        let (model, dimension) = tokio::task::spawn_blocking(move || -> Result<(TextEmbedding, usize)> {
-            tracing::info!("Initializing user-defined model: {}", config_name);
+        let (model, dimension) =
+            tokio::task::spawn_blocking(move || -> Result<(TextEmbedding, usize)> {
+                tracing::info!("Initializing user-defined model: {}", config_name);
 
-            let mut model = TextEmbedding::try_new_from_user_defined(user_model, Default::default())
-                .map_err(|e| EmbedError::External { source: e.into() })?;
+                let mut model =
+                    TextEmbedding::try_new_from_user_defined(user_model, Default::default())
+                        .map_err(|e| EmbedError::External { source: e.into() })?;
 
-            // Get dimension by generating a test embedding
-            let test_embeddings = model.embed(vec!["test".to_string()], None)
-                .map_err(|e| EmbedError::External { source: e.into() })?;
-            let dimension = test_embeddings.first()
-                .map(|emb| emb.len())
-                .unwrap_or(1024); // ModernBERT-large typically has 1024 dimensions
+                // Get dimension by generating a test embedding
+                let test_embeddings = model
+                    .embed(vec!["test".to_string()], None)
+                    .map_err(|e| EmbedError::External { source: e.into() })?;
+                let dimension = test_embeddings.first().map(|emb| emb.len()).unwrap_or(1024); // ModernBERT-large typically has 1024 dimensions
 
-            tracing::info!("User-defined model loaded successfully. Dimension: {}", dimension);
-            Ok((model, dimension))
-        }).await??;
+                tracing::info!(
+                    "User-defined model loaded successfully. Dimension: {}",
+                    dimension
+                );
+                Ok((model, dimension))
+            })
+            .await??;
 
         Ok((model, dimension))
     }
 
     /// Validate that the model is working correctly
     async fn validate_model(&self) -> Result<()> {
-        let model = self.model.as_ref().ok_or_else(|| {
-            EmbedError::invalid_config("Model not initialized")
-        })?;
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| EmbedError::invalid_config("Model not initialized"))?;
 
         // Test the model with a simple embedding
         let test_text = "validation test";
         let model_clone = Arc::clone(model);
-        
+
         let validation_result = tokio::task::spawn_blocking(move || -> Result<Vec<Vec<f32>>> {
             let mut model_guard = model_clone.lock().unwrap();
-            model_guard.embed(vec![test_text.to_string()], None)
+            model_guard
+                .embed(vec![test_text.to_string()], None)
                 .map_err(|e| EmbedError::External { source: e.into() })
-        }).await??;
+        })
+        .await??;
 
         if validation_result.is_empty() {
-            return Err(EmbedError::invalid_config("Model validation failed: no embeddings generated"));
+            return Err(EmbedError::invalid_config(
+                "Model validation failed: no embeddings generated",
+            ));
         }
 
         let embedding = &validation_result[0];
         if embedding.is_empty() {
-            return Err(EmbedError::invalid_config("Model validation failed: empty embedding"));
+            return Err(EmbedError::invalid_config(
+                "Model validation failed: empty embedding",
+            ));
         }
 
         // Validate embedding dimension matches expected
         if embedding.len() != self.dimension {
             return Err(EmbedError::invalid_config(&format!(
                 "Model validation failed: expected dimension {}, got {}",
-                self.dimension, embedding.len()
+                self.dimension,
+                embedding.len()
             )));
         }
 
         // Check for NaN or infinite values
         for value in embedding {
             if !value.is_finite() {
-                return Err(EmbedError::invalid_config("Model validation failed: non-finite values in embedding"));
+                return Err(EmbedError::invalid_config(
+                    "Model validation failed: non-finite values in embedding",
+                ));
             }
         }
 
@@ -302,15 +331,16 @@ impl FastEmbedProvider {
 
     /// Convert f32 embeddings to f16
     fn convert_to_f16(&self, embeddings: Vec<Vec<f32>>) -> Vec<Vec<f16>> {
-        embeddings.into_iter()
+        embeddings
+            .into_iter()
             .map(|embedding| {
-                let mut f16_embedding: Vec<f16> = embedding.into_iter()
-                    .map(|f| f16::from_f32(f))
-                    .collect();
+                let mut f16_embedding: Vec<f16> =
+                    embedding.into_iter().map(|f| f16::from_f32(f)).collect();
 
                 // Normalize if configured
                 if self.config.normalize {
-                    let norm: f32 = f16_embedding.iter()
+                    let norm: f32 = f16_embedding
+                        .iter()
                         .map(|x| x.to_f32() * x.to_f32())
                         .sum::<f32>()
                         .sqrt();
@@ -332,7 +362,10 @@ impl EmbeddingProvider for FastEmbedProvider {
     async fn embed_text(&self, text: &str) -> Result<Vec<f16>> {
         let texts = vec![text.to_string()];
         let result = self.embed_texts(&texts).await?;
-        result.embeddings.into_iter().next()
+        result
+            .embeddings
+            .into_iter()
+            .next()
             .ok_or_else(|| EmbedError::invalid_config("No embedding generated for text"))
     }
 
@@ -354,16 +387,18 @@ impl EmbeddingProvider for FastEmbedProvider {
         for chunk in texts.chunks(batch_size) {
             let chunk = chunk.to_vec();
             let model_clone = Arc::clone(model);
-            
+
             let batch_embeddings = tokio::task::spawn_blocking(move || -> Result<Vec<Vec<f32>>> {
                 tracing::debug!("Processing batch of {} texts", chunk.len());
-                
+
                 let mut model_guard = model_clone.lock().unwrap();
-                let embeddings = model_guard.embed(chunk, None)
+                let embeddings = model_guard
+                    .embed(chunk, None)
                     .map_err(|e| EmbedError::External { source: e.into() })?;
 
                 Ok(embeddings)
-            }).await??;
+            })
+            .await??;
 
             // Convert f32 to f16
             let f16_embeddings = self.convert_to_f16(batch_embeddings);
@@ -395,7 +430,7 @@ mod tests {
             vec![f16::from_f32(0.4), f16::from_f32(0.5), f16::from_f32(0.6)],
         ];
         let result = EmbeddingResult::new(embeddings);
-        
+
         assert_eq!(result.len(), 2);
         assert_eq!(result.dimension, 3);
         assert!(!result.is_empty());
@@ -406,7 +441,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::default_with_path(temp_dir.path());
         let provider = FastEmbedProvider::new(config);
-        
+
         assert_eq!(provider.provider_name(), "fastembed");
         assert_eq!(provider.embedding_dimension(), 1024); // Default for ModernBERT-large
     }
@@ -415,7 +450,7 @@ mod tests {
     async fn test_modernbert_config() {
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::modernbert_large(temp_dir.path());
-        
+
         assert_eq!(config.model_name, "ModernBERT-large");
         assert_eq!(config.hf_repo(), Some("answerdotai/ModernBERT-large"));
         assert_eq!(config.hf_revision(), "main");
@@ -429,8 +464,7 @@ mod tests {
         assert_eq!(FastEmbedProvider::cache_size(), 0);
 
         let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::default_with_path(temp_dir.path())
-            .with_batch_size(1);
+        let config = EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(1);
 
         // Create first provider - should load model
         let _provider1 = FastEmbedProvider::create(config.clone()).await?;
@@ -441,8 +475,7 @@ mod tests {
         assert_eq!(FastEmbedProvider::cache_size(), 1); // Still 1, reused from cache
 
         // Create provider with different config - should create new cache entry
-        let config2 = EmbedConfig::default_with_path(temp_dir.path())
-            .with_batch_size(2); // Different batch size
+        let config2 = EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(2); // Different batch size
         let _provider3 = FastEmbedProvider::create(config2).await?;
         assert_eq!(FastEmbedProvider::cache_size(), 2);
 
@@ -458,20 +491,23 @@ mod tests {
         // Test that ModernBERT config is set up correctly for user-defined model loading
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::modernbert_large(temp_dir.path());
-        
+
         assert!(config.is_huggingface_model());
         assert_eq!(config.model_name, "ModernBERT-large");
         assert_eq!(config.hf_repo(), Some("answerdotai/ModernBERT-large"));
-        
+
         // Check that paths are set up correctly
         let model_path = config.model_path();
         let onnx_path = config.onnx_model_path();
         let tokenizer_path = config.tokenizer_path();
-        
+
         assert!(model_path.to_string_lossy().contains("ModernBERT-large"));
         // ONNX path should contain either model_q4.onnx (if exists) or model_quantized.onnx (fallback)
         let onnx_path_str = onnx_path.to_string_lossy();
-        assert!(onnx_path_str.ends_with("model_q4.onnx") || onnx_path_str.ends_with("model_quantized.onnx"));
+        assert!(
+            onnx_path_str.ends_with("model_q4.onnx")
+                || onnx_path_str.ends_with("model_quantized.onnx")
+        );
         assert!(tokenizer_path.to_string_lossy().contains("tokenizer.json"));
     }
 }

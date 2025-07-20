@@ -32,10 +32,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📊 Generating embedding for single text...");
     let text = "Hello, this is a test sentence for embedding generation.";
     let embedding = provider.embed_text(text).await?;
-    
+
     println!("   Text: \"{}\"", text);
     println!("   Embedding dimension: {}", embedding.len());
-    println!("   First 5 values: {:?}", &embedding[..5.min(embedding.len())]);
+    println!(
+        "   First 5 values: {:?}",
+        &embedding[..5.min(embedding.len())]
+    );
 
     // Generate embeddings for multiple texts
     println!("\n📊 Generating embeddings for multiple texts...");
@@ -46,13 +49,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     let result = provider.embed_texts(&texts).await?;
-    
+
     println!("   Generated {} embeddings", result.len());
     println!("   Embedding dimension: {}", result.dimension);
-    
+
     for (i, (text, embedding)) in texts.iter().zip(result.embeddings.iter()).enumerate() {
         println!("   Text {}: \"{}\"", i + 1, text);
-        println!("   First 3 values: {:?}", &embedding[..3.min(embedding.len())]);
+        println!(
+            "   First 3 values: {:?}",
+            &embedding[..3.min(embedding.len())]
+        );
     }
 
     println!("\n🎉 Embedding generation completed successfully!");

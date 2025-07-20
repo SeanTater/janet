@@ -24,16 +24,19 @@ mod tests {
         // Test basic configuration creation without actually downloading models
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::default_with_path(temp_dir.path());
-        
+
         assert_eq!(config.model_name, "snowflake-arctic-embed-xs");
         assert!(!config.is_huggingface_model());
-        
+
         // Test ModernBERT config
         let modernbert_config = EmbedConfig::modernbert_large(temp_dir.path());
         assert_eq!(modernbert_config.model_name, "ModernBERT-large");
         assert!(modernbert_config.is_huggingface_model());
-        assert_eq!(modernbert_config.hf_repo(), Some("answerdotai/ModernBERT-large"));
-        
+        assert_eq!(
+            modernbert_config.hf_repo(),
+            Some("answerdotai/ModernBERT-large")
+        );
+
         Ok(())
     }
 }

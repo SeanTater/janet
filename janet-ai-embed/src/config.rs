@@ -89,13 +89,13 @@ impl EmbedConfig {
     /// Get the path to the ONNX model file (ModernBERT uses model_q4.onnx)
     pub fn onnx_model_path(&self) -> PathBuf {
         let model_dir = self.model_path();
-        
+
         // Check for ModernBERT naming convention first
         let modernbert_path = model_dir.join("onnx").join("model_q4.onnx");
         if modernbert_path.exists() {
             return modernbert_path;
         }
-        
+
         // Fallback to standard naming
         model_dir.join("onnx").join("model_quantized.onnx")
     }
@@ -173,7 +173,7 @@ mod tests {
     fn test_config_creation() {
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::new(temp_dir.path(), "test-model".to_string());
-        
+
         assert_eq!(config.model_name, "test-model");
         assert_eq!(config.batch_size, 32);
         assert!(config.normalize);
@@ -184,12 +184,21 @@ mod tests {
     fn test_config_paths() {
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::new(temp_dir.path(), "test-model".to_string());
-        
+
         let expected_base = temp_dir.path().join("test-model");
-        assert_eq!(config.onnx_model_path(), expected_base.join("onnx").join("model_quantized.onnx"));
-        assert_eq!(config.tokenizer_path(), expected_base.join("tokenizer.json"));
+        assert_eq!(
+            config.onnx_model_path(),
+            expected_base.join("onnx").join("model_quantized.onnx")
+        );
+        assert_eq!(
+            config.tokenizer_path(),
+            expected_base.join("tokenizer.json")
+        );
         assert_eq!(config.config_path(), expected_base.join("config.json"));
-        assert_eq!(config.special_tokens_map_path(), expected_base.join("special_tokens_map.json"));
+        assert_eq!(
+            config.special_tokens_map_path(),
+            expected_base.join("special_tokens_map.json")
+        );
     }
 
     #[test]
@@ -198,7 +207,7 @@ mod tests {
         let config = EmbedConfig::new(temp_dir.path(), "test-model".to_string())
             .with_batch_size(64)
             .with_normalize(false);
-        
+
         assert_eq!(config.batch_size, 64);
         assert!(!config.normalize);
     }
