@@ -29,7 +29,7 @@ impl ModelDownloader {
         let model_dir = config.model_path();
 
         // Check if model is already downloaded
-        if self.is_model_complete(&config).await? {
+        if self.is_model_complete(config).await? {
             tracing::info!("Model {} already exists and is complete", config.model_name);
             return Ok(());
         }
@@ -46,7 +46,7 @@ impl ModelDownloader {
         let repo = self.api.repo(hf_hub::Repo::model(repo_id.to_string()));
 
         // Download required files
-        self.download_model_files(&repo, &config).await?;
+        self.download_model_files(&repo, config).await?;
 
         tracing::info!("Model {} downloaded successfully", config.model_name);
         Ok(())
@@ -167,7 +167,6 @@ mod tests {
     async fn test_model_downloader_creation() {
         let _downloader = ModelDownloader::new();
         // Just test that we can create the downloader without panicking
-        assert!(true);
     }
 
     #[tokio::test]

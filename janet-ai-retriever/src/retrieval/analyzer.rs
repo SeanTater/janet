@@ -64,15 +64,15 @@ impl RemoteBertChunkAnalyzer {
             return Ok(());
         }
 
-        let model_base_path = self.config.model_base_path
-            .as_deref()
-            .unwrap_or("models");
-        let model_name = self.config.model_name
+        let model_base_path = self.config.model_base_path.as_deref().unwrap_or("models");
+        let model_name = self
+            .config
+            .model_name
             .as_deref()
             .unwrap_or("snowflake-arctic-embed-xs");
 
-        let embed_config = EmbedConfig::new(model_base_path, model_name.to_string())
-            .with_batch_size(16); // Smaller batch size for better responsiveness
+        let embed_config =
+            EmbedConfig::new(model_base_path, model_name.to_string()).with_batch_size(16); // Smaller batch size for better responsiveness
 
         match FastEmbedProvider::create(embed_config).await {
             Ok(provider) => {
@@ -80,7 +80,10 @@ impl RemoteBertChunkAnalyzer {
                 self.embedding_provider = Some(provider);
             }
             Err(e) => {
-                tracing::warn!("Failed to initialize embedding provider: {}. Continuing without embeddings.", e);
+                tracing::warn!(
+                    "Failed to initialize embedding provider: {}. Continuing without embeddings.",
+                    e
+                );
                 // Don't fail the entire analyzer if embeddings can't be initialized
             }
         }
@@ -89,7 +92,10 @@ impl RemoteBertChunkAnalyzer {
     }
 
     /// Create and initialize a new analyzer with embeddings
-    pub async fn create_with_embeddings(file_index: FileIndex, config: BertChunkConfig) -> Result<Self> {
+    pub async fn create_with_embeddings(
+        file_index: FileIndex,
+        config: BertChunkConfig,
+    ) -> Result<Self> {
         let mut analyzer = Self::new(file_index, config);
         analyzer.initialize_embeddings().await?;
         Ok(analyzer)
@@ -143,9 +149,9 @@ impl RemoteBertChunkAnalyzer {
         // Generate embeddings if provider is available
         if let Some(provider) = &self.embedding_provider {
             tracing::debug!("Generating embeddings for {} chunks", chunks.len());
-            
+
             let texts: Vec<String> = chunks.iter().map(|chunk| chunk.content.clone()).collect();
-            
+
             match provider.embed_texts(&texts).await {
                 Ok(embedding_result) => {
                     let num_embeddings = embedding_result.len();
@@ -155,7 +161,11 @@ impl RemoteBertChunkAnalyzer {
                     tracing::debug!("Successfully generated {} embeddings", num_embeddings);
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to generate embeddings for {}: {}", relative_path.display(), e);
+                    tracing::warn!(
+                        "Failed to generate embeddings for {}: {}",
+                        relative_path.display(),
+                        e
+                    );
                     // Continue without embeddings rather than failing
                 }
             }

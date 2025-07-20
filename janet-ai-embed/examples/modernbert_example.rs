@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     // Get the model cache directory from environment or use default
     let cache_dir = env::var("JANET_MODEL_CACHE").unwrap_or_else(|_| "models".to_string());
 
-    println!("📁 Using model cache directory: {}", cache_dir);
+    println!("📁 Using model cache directory: {cache_dir}");
 
     // Create configuration for ModernBERT-large
     let config = EmbedConfig::modernbert_large(&cache_dir)
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
             provider
         }
         Err(e) => {
-            eprintln!("❌ Failed to initialize ModernBERT-large: {}", e);
+            eprintln!("❌ Failed to initialize ModernBERT-large: {e}");
             eprintln!("   This might be due to:");
             eprintln!("   - Network connectivity issues");
             eprintln!("   - Missing model files in HuggingFace repository");
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     let test_text = "ModernBERT is a state-of-the-art encoder-only language model designed for improved efficiency and performance.";
 
     let embedding = provider.embed_text(test_text).await?;
-    println!("   Text: \"{}\"", test_text);
+    println!("   Text: \"{test_text}\"");
     println!("   Embedding dimension: {}", embedding.len());
     println!(
         "   First 5 values: {:?}",
@@ -103,11 +103,11 @@ async fn main() -> Result<()> {
         let norm2: f32 = emb2.iter().map(|x| x.to_f32().powi(2)).sum::<f32>().sqrt();
         let similarity = dot_product / (norm1 * norm2);
 
-        println!("\n🔍 Similarity between first two texts: {:.4}", similarity);
+        println!("\n🔍 Similarity between first two texts: {similarity:.4}");
     }
 
     println!("\n🎉 ModernBERT-large embedding generation completed successfully!");
-    println!("💡 Model files are cached at: {}", cache_dir);
+    println!("💡 Model files are cached at: {cache_dir}");
 
     Ok(())
 }

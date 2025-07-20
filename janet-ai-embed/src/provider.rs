@@ -42,12 +42,14 @@ impl EmbeddingResult {
     }
 }
 
+/// Type alias for cached model entries (model, dimension)
+type ModelCacheEntry = (Arc<Mutex<TextEmbedding>>, usize);
+
 /// Global cache for initialized embedding models to avoid reloading
-static MODEL_CACHE: OnceLock<Mutex<HashMap<String, (Arc<Mutex<TextEmbedding>>, usize)>>> =
-    OnceLock::new();
+static MODEL_CACHE: OnceLock<Mutex<HashMap<String, ModelCacheEntry>>> = OnceLock::new();
 
 /// Get the global model cache
-fn get_model_cache() -> &'static Mutex<HashMap<String, (Arc<Mutex<TextEmbedding>>, usize)>> {
+fn get_model_cache() -> &'static Mutex<HashMap<String, ModelCacheEntry>> {
     MODEL_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -95,14 +97,18 @@ impl FastEmbedProvider {
         let cache_key = self.create_cache_key();
 
         // Check if model is already cached
-        {
+        let cached_data = {
             let cache = get_model_cache().lock().unwrap();
-            if let Some((cached_model, cached_dimension)) = cache.get(&cache_key) {
-                tracing::info!("Using cached model for: {}", self.config.model_name);
-                self.model = Some(Arc::clone(cached_model));
-                self.dimension = *cached_dimension;
-                return self.validate_model().await;
-            }
+            cache
+                .get(&cache_key)
+                .map(|(model, dim)| (Arc::clone(model), *dim))
+        };
+
+        if let Some((cached_model, cached_dimension)) = cached_data {
+            tracing::info!("Using cached model for: {}", self.config.model_name);
+            self.model = Some(cached_model);
+            self.dimension = cached_dimension;
+            return self.validate_model().await;
         }
 
         // Check if this is a HuggingFace model that needs downloading
@@ -136,12 +142,12 @@ impl FastEmbedProvider {
                         .with_show_download_progress(true);
 
                     let mut model = TextEmbedding::try_new(init_options)
-                        .map_err(|e| EmbedError::External { source: e.into() })?;
+                        .map_err(|e| EmbedError::External { source: e })?;
 
                     // Get dimension by generating a test embedding
                     let test_embeddings = model
                         .embed(vec!["test".to_string()], None)
-                        .map_err(|e| EmbedError::External { source: e.into() })?;
+                        .map_err(|e| EmbedError::External { source: e })?;
                     let dimension = test_embeddings.first().map(|emb| emb.len()).unwrap_or(384);
 
                     tracing::info!("Model loaded successfully. Dimension: {}", dimension);
@@ -241,12 +247,12 @@ impl FastEmbedProvider {
 
                 let mut model =
                     TextEmbedding::try_new_from_user_defined(user_model, Default::default())
-                        .map_err(|e| EmbedError::External { source: e.into() })?;
+                        .map_err(|e| EmbedError::External { source: e })?;
 
                 // Get dimension by generating a test embedding
                 let test_embeddings = model
                     .embed(vec!["test".to_string()], None)
-                    .map_err(|e| EmbedError::External { source: e.into() })?;
+                    .map_err(|e| EmbedError::External { source: e })?;
                 let dimension = test_embeddings.first().map(|emb| emb.len()).unwrap_or(1024); // ModernBERT-large typically has 1024 dimensions
 
                 tracing::info!(
@@ -275,7 +281,7 @@ impl FastEmbedProvider {
             let mut model_guard = model_clone.lock().unwrap();
             model_guard
                 .embed(vec![test_text.to_string()], None)
-                .map_err(|e| EmbedError::External { source: e.into() })
+                .map_err(|e| EmbedError::External { source: e })
         })
         .await??;
 
@@ -294,7 +300,7 @@ impl FastEmbedProvider {
 
         // Validate embedding dimension matches expected
         if embedding.len() != self.dimension {
-            return Err(EmbedError::invalid_config(&format!(
+            return Err(EmbedError::invalid_config(format!(
                 "Model validation failed: expected dimension {}, got {}",
                 self.dimension,
                 embedding.len()
@@ -335,7 +341,7 @@ impl FastEmbedProvider {
             .into_iter()
             .map(|embedding| {
                 let mut f16_embedding: Vec<f16> =
-                    embedding.into_iter().map(|f| f16::from_f32(f)).collect();
+                    embedding.into_iter().map(f16::from_f32).collect();
 
                 // Normalize if configured
                 if self.config.normalize {
@@ -394,7 +400,7 @@ impl EmbeddingProvider for FastEmbedProvider {
                 let mut model_guard = model_clone.lock().unwrap();
                 let embeddings = model_guard
                     .embed(chunk, None)
-                    .map_err(|e| EmbedError::External { source: e.into() })?;
+                    .map_err(|e| EmbedError::External { source: e })?;
 
                 Ok(embeddings)
             })

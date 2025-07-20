@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = "Hello, this is a test sentence for embedding generation.";
     let embedding = provider.embed_text(text).await?;
 
-    println!("   Text: \"{}\"", text);
+    println!("   Text: \"{text}\"");
     println!("   Embedding dimension: {}", embedding.len());
     println!(
         "   First 5 values: {:?}",
