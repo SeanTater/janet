@@ -1771,6 +1771,7 @@ dependencies = [
  "clap",
  "futures",
  "glob",
+ "half",
  "ignore",
  "janet-ai-context",
  "janet-ai-embed",
