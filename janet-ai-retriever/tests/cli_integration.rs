@@ -1,4 +1,5 @@
 use anyhow::Result;
+use half::f16;
 use janet_ai_retriever::retrieval::file_index::{ChunkRef, FileIndex, FileRef};
 use std::process::Command;
 use tempfile::TempDir;
@@ -51,7 +52,12 @@ async fn populate_test_data(temp_dir: &TempDir) -> Result<()> {
             line_start: 1,
             line_end: 1,
             content: "fn main() {".to_string(),
-            embedding: Some(vec![0.1, 0.2, 0.3, 0.4]),
+            embedding: Some(vec![
+                f16::from_f32(0.1),
+                f16::from_f32(0.2),
+                f16::from_f32(0.3),
+                f16::from_f32(0.4),
+            ]),
         },
         ChunkRef {
             id: None,
@@ -60,7 +66,12 @@ async fn populate_test_data(temp_dir: &TempDir) -> Result<()> {
             line_start: 2,
             line_end: 2,
             content: "    println!(\"Hello, world!\");".to_string(),
-            embedding: Some(vec![0.5, 0.6, 0.7, 0.8]),
+            embedding: Some(vec![
+                f16::from_f32(0.5),
+                f16::from_f32(0.6),
+                f16::from_f32(0.7),
+                f16::from_f32(0.8),
+            ]),
         },
         ChunkRef {
             id: None,
@@ -69,7 +80,12 @@ async fn populate_test_data(temp_dir: &TempDir) -> Result<()> {
             line_start: 1,
             line_end: 2,
             content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b".to_string(),
-            embedding: Some(vec![0.9, 0.8, 0.7, 0.6]),
+            embedding: Some(vec![
+                f16::from_f32(0.9),
+                f16::from_f32(0.8),
+                f16::from_f32(0.7),
+                f16::from_f32(0.6),
+            ]),
         },
         ChunkRef {
             id: None,

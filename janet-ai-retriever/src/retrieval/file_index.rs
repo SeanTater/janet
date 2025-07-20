@@ -1,4 +1,6 @@
 use anyhow::Result;
+#[allow(unused_imports)]
+use half::f16;
 use sqlx::{Row, SqlitePool};
 use std::path::{Path, PathBuf};
 
@@ -22,7 +24,7 @@ pub struct ChunkRef {
     pub line_start: usize,
     pub line_end: usize,
     pub content: String,
-    pub embedding: Option<Vec<f32>>,
+    pub embedding: Option<Vec<half::f16>>,
 }
 
 #[derive(Clone)]
@@ -175,7 +177,7 @@ impl FileIndex {
             let embedding_bytes = chunk
                 .embedding
                 .as_ref()
-                .map(|e| bytemuck::cast_slice::<f32, u8>(e));
+                .map(|e| bytemuck::cast_slice::<half::f16, u8>(e));
 
             sqlx::query(
                 r#"
@@ -220,7 +222,7 @@ impl FileIndex {
             let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
 
             let embedding =
-                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, half::f16>(&bytes).to_vec());
 
             chunks.push(ChunkRef {
                 id: Some(id),
@@ -266,7 +268,7 @@ impl FileIndex {
             file_hash.copy_from_slice(&file_hash_bytes[..32]);
 
             let embedding =
-                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, half::f16>(&bytes).to_vec());
 
             Ok(Some(ChunkRef {
                 id: Some(id),
@@ -283,8 +285,12 @@ impl FileIndex {
     }
 
     /// Update a chunk's embedding by ID
-    pub async fn update_chunk_embedding(&self, id: i64, embedding: Option<&[f32]>) -> Result<()> {
-        let embedding_bytes = embedding.map(bytemuck::cast_slice::<f32, u8>);
+    pub async fn update_chunk_embedding(
+        &self,
+        id: i64,
+        embedding: Option<&[half::f16]>,
+    ) -> Result<()> {
+        let embedding_bytes = embedding.map(bytemuck::cast_slice::<half::f16, u8>);
 
         sqlx::query("UPDATE chunks SET embedding = ?1 WHERE id = ?2")
             .bind(embedding_bytes)
@@ -318,7 +324,7 @@ impl FileIndex {
             file_hash.copy_from_slice(&file_hash_bytes[..32]);
 
             let embedding =
-                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, half::f16>(&bytes).to_vec());
 
             chunks.push(ChunkRef {
                 id: Some(id),
@@ -338,7 +344,7 @@ impl FileIndex {
         let embedding_bytes = chunk
             .embedding
             .as_ref()
-            .map(|e| bytemuck::cast_slice::<f32, u8>(e));
+            .map(|e| bytemuck::cast_slice::<half::f16, u8>(e));
 
         sqlx::query(
             "UPDATE chunks SET file_hash = ?1, relative_path = ?2, line_start = ?3,
@@ -404,7 +410,7 @@ impl FileIndex {
             file_hash.copy_from_slice(&file_hash_bytes[..32]);
 
             let embedding =
-                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, f32>(&bytes).to_vec());
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, half::f16>(&bytes).to_vec());
 
             chunks.push(ChunkRef {
                 id: Some(id),
@@ -474,7 +480,11 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 content: "fn main() {}".to_string(),
-                embedding: Some(vec![0.1, 0.2, 0.3]),
+                embedding: Some(vec![
+                    f16::from_f32(0.1),
+                    f16::from_f32(0.2),
+                    f16::from_f32(0.3),
+                ]),
             },
             ChunkRef {
                 id: None,
@@ -483,7 +493,11 @@ mod tests {
                 line_start: 2,
                 line_end: 2,
                 content: "fn test() {}".to_string(),
-                embedding: Some(vec![0.4, 0.5, 0.6]),
+                embedding: Some(vec![
+                    f16::from_f32(0.4),
+                    f16::from_f32(0.5),
+                    f16::from_f32(0.6),
+                ]),
             },
         ];
 
@@ -498,7 +512,7 @@ mod tests {
         assert!(fetched_chunks[0].embedding.is_some());
         assert_eq!(
             fetched_chunks[0].embedding.as_ref().unwrap(),
-            &vec![0.1, 0.2, 0.3]
+            &vec![f16::from_f32(0.1), f16::from_f32(0.2), f16::from_f32(0.3)]
         );
 
         Ok(())

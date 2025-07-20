@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use half::f16;
 use janet_ai_retriever::{
     retrieval::file_index::FileIndex,
     storage::{ChunkFilter, ChunkStore, CombinedStore, sqlite_store::SqliteStore},
@@ -266,7 +267,13 @@ async fn run() -> anyhow::Result<()> {
             let file_index = FileIndex::open(&args.base_dir).await?;
             let store = SqliteStore::new(file_index);
 
-            let results = store.search_chunks(embedding, limit, threshold).await?;
+            // Convert f32 embedding to f16
+            let embedding_f16: Vec<f16> = embedding.iter().map(|&x| f16::from_f32(x)).collect();
+            let threshold_f16 = threshold.map(f16::from_f32);
+
+            let results = store
+                .search_chunks(embedding_f16, limit, threshold_f16)
+                .await?;
 
             match format {
                 OutputFormat::Json => {
@@ -282,7 +289,7 @@ async fn run() -> anyhow::Result<()> {
                                 content: chunk.content,
                                 has_embedding: chunk.embedding.is_some(),
                             },
-                            similarity,
+                            similarity: similarity.to_f32(),
                         })
                         .collect();
                     println!("{}", serde_json::to_string_pretty(&similarity_results)?);
@@ -292,7 +299,7 @@ async fn run() -> anyhow::Result<()> {
                     for (chunk, similarity) in results {
                         println!(
                             "  Similarity: {:.3} | ID: {} | File: {} | Lines: {}-{}",
-                            similarity,
+                            similarity.to_f32(),
                             chunk.id.unwrap_or(0),
                             chunk.relative_path,
                             chunk.line_start,
@@ -302,7 +309,7 @@ async fn run() -> anyhow::Result<()> {
                 }
                 OutputFormat::Full => {
                     for (chunk, similarity) in results {
-                        println!("Similarity: {similarity:.3}");
+                        println!("Similarity: {:.3}", similarity.to_f32());
                         println!("Chunk ID: {}", chunk.id.unwrap_or(0));
                         println!("File: {}", chunk.relative_path);
                         println!("Lines: {}-{}", chunk.line_start, chunk.line_end);
