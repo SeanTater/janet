@@ -9,7 +9,7 @@ pub mod downloader;
 pub mod error;
 pub mod provider;
 
-pub use config::EmbedConfig;
+pub use config::{EmbedConfig, TokenizerConfig};
 pub use downloader::ModelDownloader;
 pub use error::{EmbedError, Result};
 pub use provider::{EmbeddingProvider, EmbeddingResult, FastEmbedProvider};

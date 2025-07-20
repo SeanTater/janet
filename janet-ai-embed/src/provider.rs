@@ -198,24 +198,37 @@ impl FastEmbedProvider {
             .await
             .map_err(|e| EmbedError::Io { source: e })?;
 
-        let tokenizer_file = fs::read(self.config.tokenizer_path())
+        let tokenizer_config = &self.config.tokenizer_config;
+
+        let tokenizer_file = fs::read(&tokenizer_config.tokenizer_path)
             .await
             .map_err(|e| EmbedError::Io { source: e })?;
 
-        let config_file = fs::read(self.config.config_path())
+        let config_file = fs::read(&tokenizer_config.config_path)
             .await
             .map_err(|e| EmbedError::Io { source: e })?;
 
-        let special_tokens_map_file = fs::read(self.config.special_tokens_map_path())
+        let special_tokens_map_file = fs::read(&tokenizer_config.special_tokens_map_path)
             .await
             .map_err(|e| EmbedError::Io { source: e })?;
 
         // Check if tokenizer_config.json exists, create a minimal one if not
-        let tokenizer_config_path = self.config.model_path().join("tokenizer_config.json");
-        let tokenizer_config_file = if tokenizer_config_path.exists() {
-            fs::read(&tokenizer_config_path)
-                .await
-                .map_err(|e| EmbedError::Io { source: e })?
+        let tokenizer_config_file = if let Some(ref path) = tokenizer_config.tokenizer_config_path {
+            if path.exists() {
+                fs::read(path)
+                    .await
+                    .map_err(|e| EmbedError::Io { source: e })?
+            } else {
+                // Create a minimal tokenizer config
+                let minimal_config = serde_json::json!({
+                    "clean_up_tokenization_spaces": true,
+                    "do_lower_case": false,
+                    "model_max_length": 512,
+                    "tokenizer_class": "BertTokenizer"
+                });
+                serde_json::to_vec_pretty(&minimal_config)
+                    .map_err(|e| EmbedError::External { source: e.into() })?
+            }
         } else {
             // Create a minimal tokenizer config
             let minimal_config = serde_json::json!({
@@ -505,7 +518,7 @@ mod tests {
         // Check that paths are set up correctly
         let model_path = config.model_path();
         let onnx_path = config.onnx_model_path();
-        let tokenizer_path = config.tokenizer_path();
+        let tokenizer_path = &config.tokenizer_config.tokenizer_path;
 
         assert!(model_path.to_string_lossy().contains("ModernBERT-large"));
         // ONNX path should contain either model_q4.onnx (if exists) or model_quantized.onnx (fallback)

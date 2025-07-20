@@ -1,7 +1,7 @@
 use super::file_index::{ChunkRef, FileIndex, FileRef};
 use anyhow::Result;
 use async_trait::async_trait;
-use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider};
+use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider, TokenizerConfig};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -71,7 +71,10 @@ impl RemoteBertChunkAnalyzer {
             .as_deref()
             .unwrap_or("snowflake-arctic-embed-xs");
 
-        let embed_config = EmbedConfig::new(model_base_path, model_name).with_batch_size(16); // Smaller batch size for better responsiveness
+        let model_dir = PathBuf::from(model_base_path).join(model_name);
+        let tokenizer_config = TokenizerConfig::standard(&model_dir);
+        let embed_config =
+            EmbedConfig::new(model_base_path, model_name, tokenizer_config).with_batch_size(16); // Smaller batch size for better responsiveness
 
         match FastEmbedProvider::create(embed_config).await {
             Ok(provider) => {

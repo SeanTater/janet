@@ -54,11 +54,12 @@ impl ModelDownloader {
 
     /// Check if the model is completely downloaded
     async fn is_model_complete(&self, config: &EmbedConfig) -> Result<bool> {
+        let tokenizer_config = &config.tokenizer_config;
         let required_files = [
             config.onnx_model_path(),
-            config.tokenizer_path(),
-            config.config_path(),
-            config.special_tokens_map_path(),
+            tokenizer_config.tokenizer_path.clone(),
+            tokenizer_config.config_path.clone(),
+            tokenizer_config.special_tokens_map_path.clone(),
             // tokenizer_config.json is optional - we can generate it if missing
         ];
 
@@ -76,24 +77,40 @@ impl ModelDownloader {
     async fn download_model_files(&self, repo: &ApiRepo, config: &EmbedConfig) -> Result<()> {
         let model_dir = config.model_path();
         let onnx_dir = model_dir.join("onnx");
+        let tokenizer_config = &config.tokenizer_config;
 
         // Create subdirectories
         fs::create_dir_all(&onnx_dir).await?;
 
+        // Create parent directories for tokenizer files
+        if let Some(parent) = tokenizer_config.tokenizer_path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        if let Some(parent) = tokenizer_config.config_path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        if let Some(parent) = tokenizer_config.special_tokens_map_path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+
         // Files to download with their local paths
-        let downloads = [
+        let mut downloads = vec![
             ("onnx/model_q4.onnx", onnx_dir.join("model_q4.onnx")),
-            ("tokenizer.json", model_dir.join("tokenizer.json")),
-            ("config.json", model_dir.join("config.json")),
+            ("tokenizer.json", tokenizer_config.tokenizer_path.clone()),
+            ("config.json", tokenizer_config.config_path.clone()),
             (
                 "special_tokens_map.json",
-                model_dir.join("special_tokens_map.json"),
-            ),
-            (
-                "tokenizer_config.json",
-                model_dir.join("tokenizer_config.json"),
+                tokenizer_config.special_tokens_map_path.clone(),
             ),
         ];
+
+        // Add tokenizer_config.json if specified
+        if let Some(ref path) = tokenizer_config.tokenizer_config_path {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).await?;
+            }
+            downloads.push(("tokenizer_config.json", path.clone()));
+        }
 
         for (remote_path, local_path) in &downloads {
             if local_path.exists() {
