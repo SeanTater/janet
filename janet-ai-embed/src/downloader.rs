@@ -61,13 +61,17 @@ impl ModelDownloader {
         // Check for the specific ONNX file we download (model_q4.onnx)
         let onnx_file = onnx_dir.join("model_q4.onnx");
 
-        let required_files = [
+        let mut required_files = vec![
             onnx_file,
             tokenizer_config.tokenizer_path.clone(),
             tokenizer_config.config_path.clone(),
             tokenizer_config.special_tokens_map_path.clone(),
-            // tokenizer_config.json is optional - we can generate it if missing
         ];
+
+        // Add tokenizer_config.json if specified (it's optional)
+        if let Some(ref path) = tokenizer_config.tokenizer_config_path {
+            required_files.push(path.clone());
+        }
 
         for file_path in &required_files {
             if !file_path.exists() {

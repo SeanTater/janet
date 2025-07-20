@@ -442,8 +442,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    #[tokio::test]
-    async fn test_embedding_result() {
+    #[test]
+    fn test_embedding_result() {
         let embeddings = vec![
             vec![f16::from_f32(0.1), f16::from_f32(0.2), f16::from_f32(0.3)],
             vec![f16::from_f32(0.4), f16::from_f32(0.5), f16::from_f32(0.6)],
@@ -455,8 +455,8 @@ mod tests {
         assert!(!result.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_fastembed_provider_creation() {
+    #[test]
+    fn test_fastembed_provider_creation() {
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::default_with_path(temp_dir.path());
         let provider = FastEmbedProvider::new(config);

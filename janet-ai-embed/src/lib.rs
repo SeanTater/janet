@@ -19,8 +19,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    #[tokio::test]
-    async fn test_config_creation() -> Result<()> {
+    #[test]
+    fn test_config_creation() {
         // Test basic configuration creation without actually downloading models
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::default_with_path(temp_dir.path());
@@ -36,7 +36,5 @@ mod tests {
             modernbert_config.hf_repo(),
             Some("answerdotai/ModernBERT-large")
         );
-
-        Ok(())
     }
 }
