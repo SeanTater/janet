@@ -423,7 +423,7 @@ impl FileIndex {
         }
         Ok(chunks)
     }
-    
+
     /// Get the underlying SQLite connection pool
     pub fn pool(&self) -> &SqlitePool {
         &self.pool

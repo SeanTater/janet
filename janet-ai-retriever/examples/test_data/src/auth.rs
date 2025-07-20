@@ -70,18 +70,26 @@ impl AuthService {
             return Err(AuthError::InvalidCredentials);
         }
 
-        let user = self.users
+        let user = self
+            .users
             .values()
             .find(|u| u.username == username)
             .ok_or(AuthError::UserNotFound)?;
 
-        let token = format!("token_{}_{}", user.id, 
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
-        
+        let token = format!(
+            "token_{}_{}",
+            user.id,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+
         let expires_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() + 3600; // 1 hour from now
+            .as_secs()
+            + 3600; // 1 hour from now
 
         let auth_token = AuthToken {
             token: token.clone(),
@@ -96,9 +104,7 @@ impl AuthService {
 
     /// Validate an authentication token
     pub fn validate_token(&self, token: &str) -> Result<&User, AuthError> {
-        let auth_token = self.tokens
-            .get(token)
-            .ok_or(AuthError::InvalidToken)?;
+        let auth_token = self.tokens.get(token).ok_or(AuthError::InvalidToken)?;
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -109,7 +115,8 @@ impl AuthService {
             return Err(AuthError::TokenExpired);
         }
 
-        let user = self.users
+        let user = self
+            .users
             .get(&auth_token.user_id)
             .ok_or(AuthError::UserNotFound)?;
 
@@ -123,7 +130,8 @@ impl AuthService {
 
     /// Add a role to a user
     pub fn add_user_role(&mut self, user_id: u64, role: String) -> Result<(), AuthError> {
-        let user = self.users
+        let user = self
+            .users
             .get_mut(&user_id)
             .ok_or(AuthError::UserNotFound)?;
 
@@ -164,7 +172,10 @@ impl std::error::Error for AuthError {}
 
 /// Setup the authentication system with the given API key
 pub fn setup_auth_system(api_key: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Setting up authentication system with API key: {}...", &api_key[..8]);
+    println!(
+        "Setting up authentication system with API key: {}...",
+        &api_key[..8]
+    );
     // Mock implementation
     Ok(())
 }

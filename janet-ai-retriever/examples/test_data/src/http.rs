@@ -72,11 +72,15 @@ impl HttpClient {
     }
 
     /// Make a POST request with JSON body
-    pub async fn post_json(&self, path: &str, json_body: &str) -> Result<HttpResponse, Box<dyn std::error::Error>> {
+    pub async fn post_json(
+        &self,
+        path: &str,
+        json_body: &str,
+    ) -> Result<HttpResponse, Box<dyn std::error::Error>> {
         let url = format!("{}{}", self.base_url, path);
         let mut headers = self.default_headers.clone();
         headers.insert("Content-Type".to_string(), "application/json".to_string());
-        
+
         let request = HttpRequest {
             method: HttpMethod::Post,
             url,
@@ -87,7 +91,10 @@ impl HttpClient {
     }
 
     /// Send an HTTP request
-    async fn send_request(&self, _request: HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>> {
+    async fn send_request(
+        &self,
+        _request: HttpRequest,
+    ) -> Result<HttpResponse, Box<dyn std::error::Error>> {
         // This is a mock implementation for the example
         Ok(HttpResponse {
             status_code: 200,

@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{Mutex, Notify, mpsc};
 use tracing::{debug, warn};
 
 /// Priority levels for indexing tasks
@@ -56,27 +56,27 @@ impl IndexingTask {
             retry_count: 0,
         }
     }
-    
+
     /// Create a high-priority task for indexing a single file
     pub fn index_file_high_priority(path: PathBuf) -> Self {
         Self::new(TaskType::IndexFile { path }, TaskPriority::High)
     }
-    
+
     /// Create a normal-priority task for indexing a single file
     pub fn index_file(path: PathBuf) -> Self {
         Self::new(TaskType::IndexFile { path }, TaskPriority::Normal)
     }
-    
+
     /// Create a background task for indexing a single file
     pub fn index_file_background(path: PathBuf) -> Self {
         Self::new(TaskType::IndexFile { path }, TaskPriority::Background)
     }
-    
+
     /// Create a task for removing a file from the index
     pub fn remove_file(path: PathBuf) -> Self {
         Self::new(TaskType::RemoveFile { path }, TaskPriority::High)
     }
-    
+
     /// Get the age of this task in seconds
     pub fn age_seconds(&self) -> u64 {
         SystemTime::now()
@@ -85,17 +85,17 @@ impl IndexingTask {
             .as_secs()
             .saturating_sub(self.created_at)
     }
-    
+
     /// Increment retry count
     pub fn increment_retry(&mut self) {
         self.retry_count += 1;
     }
-    
+
     /// Check if task should be retried (max 3 retries)
     pub fn should_retry(&self) -> bool {
         self.retry_count < 3
     }
-    
+
     /// Get a description of the task for logging
     pub fn description(&self) -> String {
         match &self.task_type {
@@ -125,8 +125,11 @@ impl PriorityTask {
                     .unwrap_or(0)
             }
         };
-        
-        Self { task, file_priority }
+
+        Self {
+            task,
+            file_priority,
+        }
     }
 }
 
@@ -198,7 +201,7 @@ impl TaskQueue {
     /// Create a new task queue with the given configuration
     pub fn new(config: TaskQueueConfig) -> Self {
         let (task_sender, task_receiver) = mpsc::unbounded_channel();
-        
+
         Self {
             config,
             queue: Arc::new(Mutex::new(BinaryHeap::new())),
@@ -208,13 +211,13 @@ impl TaskQueue {
             is_shutdown: Arc::new(Mutex::new(false)),
         }
     }
-    
+
     /// Submit a task to the queue
     pub async fn submit_task(&self, task: IndexingTask) -> Result<(), String> {
         if *self.is_shutdown.lock().await {
             return Err("Task queue is shutdown".to_string());
         }
-        
+
         // Check queue size limit
         {
             let queue = self.queue.lock().await;
@@ -223,15 +226,16 @@ impl TaskQueue {
                 return Err("Task queue is full".to_string());
             }
         }
-        
+
         debug!("Submitting task: {}", task.description());
-        
-        self.task_sender.send(task)
-            .map_err(|e| format!("Failed to submit task: {}", e))?;
-            
+
+        self.task_sender
+            .send(task)
+            .map_err(|e| format!("Failed to submit task: {e}"))?;
+
         Ok(())
     }
-    
+
     /// Submit multiple tasks at once
     pub async fn submit_tasks(&self, tasks: Vec<IndexingTask>) -> Result<(), String> {
         for task in tasks {
@@ -239,29 +243,29 @@ impl TaskQueue {
         }
         Ok(())
     }
-    
+
     /// Get the next highest priority task from the queue
     pub async fn pop_task(&self) -> Option<IndexingTask> {
         let mut queue = self.queue.lock().await;
         queue.pop().map(|pt| pt.task)
     }
-    
+
     /// Get the current queue size
     pub async fn queue_size(&self) -> usize {
         let queue = self.queue.lock().await;
         queue.len()
     }
-    
+
     /// Start the queue processor that moves tasks from the channel to the priority queue
     pub async fn start_processor(&self) {
         let queue = Arc::clone(&self.queue);
         let receiver = Arc::clone(&self.task_receiver);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
         let is_shutdown = Arc::clone(&self.is_shutdown);
-        
+
         tokio::spawn(async move {
             let mut receiver = receiver.lock().await;
-            
+
             loop {
                 tokio::select! {
                     task = receiver.recv() => {
@@ -282,30 +286,30 @@ impl TaskQueue {
                     }
                 }
             }
-            
+
             let mut shutdown = is_shutdown.lock().await;
             *shutdown = true;
         });
     }
-    
+
     /// Shutdown the task queue
     pub async fn shutdown(&self) {
         debug!("Shutting down task queue");
         self.shutdown_notify.notify_waiters();
-        
+
         // Wait for shutdown to complete
         while !*self.is_shutdown.lock().await {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        
+
         debug!("Task queue shutdown complete");
     }
-    
+
     /// Check if the queue is shutdown
     pub async fn is_shutdown(&self) -> bool {
         *self.is_shutdown.lock().await
     }
-    
+
     /// Clear all tasks from the queue
     pub async fn clear(&self) {
         let mut queue = self.queue.lock().await;
@@ -317,80 +321,84 @@ impl TaskQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_task_priority_ordering() {
         let low = PriorityTask::new(IndexingTask::new(
-            TaskType::IndexFile { path: PathBuf::from("test") },
+            TaskType::IndexFile {
+                path: PathBuf::from("test"),
+            },
             TaskPriority::Background,
         ));
         let high = PriorityTask::new(IndexingTask::new(
-            TaskType::IndexFile { path: PathBuf::from("test") },
+            TaskType::IndexFile {
+                path: PathBuf::from("test"),
+            },
             TaskPriority::Critical,
         ));
-        
+
         assert!(high > low);
     }
-    
+
     #[tokio::test]
     async fn test_task_queue_operations() {
         let config = TaskQueueConfig::default();
         let queue = TaskQueue::new(config);
-        
+
         // Start the processor
         queue.start_processor().await;
-        
+
         // Submit some tasks
         let task1 = IndexingTask::index_file_background(PathBuf::from("file1.txt"));
         let task2 = IndexingTask::index_file_high_priority(PathBuf::from("file2.txt"));
         let task3 = IndexingTask::index_file(PathBuf::from("file3.txt"));
-        
+
         queue.submit_task(task1).await.unwrap();
         queue.submit_task(task2).await.unwrap();
         queue.submit_task(task3).await.unwrap();
-        
+
         // Give processor time to process
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         // High priority task should come first
         let next_task = queue.pop_task().await.unwrap();
         assert_eq!(next_task.priority, TaskPriority::High);
-        
+
         // Normal priority comes next
         let next_task = queue.pop_task().await.unwrap();
         assert_eq!(next_task.priority, TaskPriority::Normal);
-        
+
         // Background priority comes last
         let next_task = queue.pop_task().await.unwrap();
         assert_eq!(next_task.priority, TaskPriority::Background);
-        
+
         queue.shutdown().await;
     }
-    
+
     #[tokio::test]
     async fn test_task_retry_logic() {
         let mut task = IndexingTask::index_file(PathBuf::from("test.txt"));
-        
+
         assert!(task.should_retry());
         assert_eq!(task.retry_count, 0);
-        
+
         task.increment_retry();
         assert!(task.should_retry());
         assert_eq!(task.retry_count, 1);
-        
+
         task.increment_retry();
         task.increment_retry();
         assert!(!task.should_retry());
         assert_eq!(task.retry_count, 3);
     }
-    
+
     #[test]
     fn test_task_priority_parsing() {
         assert_eq!(TaskPriority::Background as u8, 0);
         assert_eq!(TaskPriority::Normal as u8, 1);
         assert_eq!(TaskPriority::High as u8, 2);
         assert_eq!(TaskPriority::Critical as u8, 3);
-        
+
         assert!(TaskPriority::Critical > TaskPriority::High);
         assert!(TaskPriority::High > TaskPriority::Normal);
         assert!(TaskPriority::Normal > TaskPriority::Background);

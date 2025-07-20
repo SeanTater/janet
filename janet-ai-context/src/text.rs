@@ -91,7 +91,7 @@
 //!
 //! // Verify that chunks were created and their content is correct
 //! assert!(!chunks.is_empty());
-//! let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text).collect();
+//! let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text.as_str()).collect();
 //! assert_eq!(reconstructed_content, file_content);
 //!
 //! // You can iterate over chunks to process them individually
@@ -102,6 +102,7 @@
 //! }
 //! ```
 use regex::Regex;
+use serde::{Serialize, Serializer};
 use std::ops::Range;
 use std::path::Path;
 
@@ -132,17 +133,19 @@ pub const CODE_DELIMITERS: &[&str] = &[
     r"(?m)^(pub\s+)?(struct|enum|trait|impl|fn|class|def|function|interface)\s+\w+", // Declarations
     r"(?m)^(import|use|from|#include)\s+", // Import statements
     r"(?m)^(package|namespace|module)\s+", // Module declarations
-    r"\n\n",             // Paragraph breaks
-    r"\n",               // Line breaks
-    r" ",                // Spaces
+    r"\n\n",                               // Paragraph breaks
+    r"\n",                                 // Line breaks
+    r" ",                                  // Spaces
 ];
 
 /// Get appropriate delimiters based on file extension
 pub fn get_delimiters_for_path(path: &Path) -> &'static [&'static str] {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("md") | Some("markdown") | Some("txt") => DEFAULT_MARKDOWN_DELIMITERS,
-        Some("rs") | Some("py") | Some("js") | Some("ts") | Some("jsx") | Some("tsx") |
-        Some("go") | Some("java") | Some("c") | Some("cpp") | Some("h") | Some("hpp") => CODE_DELIMITERS,
+        Some("rs") | Some("py") | Some("js") | Some("ts") | Some("jsx") | Some("tsx")
+        | Some("go") | Some("java") | Some("c") | Some("cpp") | Some("h") | Some("hpp") => {
+            CODE_DELIMITERS
+        }
         _ => {
             // Check for common documentation files
             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
@@ -163,7 +166,7 @@ pub fn create_builder_for_path(
 ) -> TextContextBuilder {
     let delimiters = get_delimiters_for_path(file_path);
     let chunk_size = max_chunk_length.unwrap_or(2000);
-    
+
     TextContextBuilder::new(
         repo,
         file_path.to_string_lossy().to_string(),
@@ -187,20 +190,37 @@ pub struct TextContextBuilder {
 
 /// Represents a single chunk of text extracted from a file, along with its metadata.
 ///
-/// `TextChunk` provides a view into a portion of the original file content,
+/// `TextChunk` contains a portion of the original file content,
 /// retaining information about its origin (repository, path), its order within
-/// the sequence of chunks, and references to the full file content and its own text.
-pub struct TextChunk<'builder, 't> {
+/// the sequence of chunks, and owned copies of the full file content and its own text.
+#[derive(Debug, Clone)]
+pub struct TextChunk {
     /// The name of the repository the file belongs to.
-    pub repo: &'builder str,
+    pub repo: String,
     /// The path to the file within the repository.
-    pub path: &'builder str,
+    pub path: String,
     /// The sequence number of this chunk within the file (0-indexed).
     pub sequence: usize,
-    /// A reference to the entire original file content.
-    pub file_content: &'t str,
+    /// The entire original file content.
+    pub file_content: String,
     /// The text content of this specific chunk.
-    pub chunk_text: &'t str,
+    pub chunk_text: String,
+}
+
+impl Serialize for TextChunk {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("TextChunk", 5)?;
+        state.serialize_field("repo", &self.repo)?;
+        state.serialize_field("path", &self.path)?;
+        state.serialize_field("sequence", &self.sequence)?;
+        state.serialize_field("chunk_text", &self.chunk_text)?;
+        state.serialize_field("summary", &self.build())?;
+        state.end()
+    }
 }
 
 impl TextContextBuilder {
@@ -311,7 +331,7 @@ impl TextContextBuilder {
     /// assert!(!chunks.is_empty());
     ///
     /// // Verify that concatenating chunks reconstructs the original content
-    /// let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text).collect();
+    /// let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text.as_str()).collect();
     /// assert_eq!(reconstructed_content, file_content);
     ///
     /// // Check properties of the first chunk
@@ -325,10 +345,10 @@ impl TextContextBuilder {
     /// let long_content = (0..100).map(|_| "A very long sentence part. ").collect::<String>();
     /// let long_chunks = builder.get_chunks(&long_content);
     /// assert!(long_chunks.len() > 1); // Should be split into multiple chunks
-    /// let reconstructed_long_content: String = long_chunks.iter().map(|c| c.chunk_text).collect();
+    /// let reconstructed_long_content: String = long_chunks.iter().map(|c| c.chunk_text.as_str()).collect();
     /// assert_eq!(reconstructed_long_content, long_content);
     /// ```
-    pub fn get_chunks<'t>(&self, file_content: &'t str) -> Vec<TextChunk<'_, 't>> {
+    pub fn get_chunks(&self, file_content: &str) -> Vec<TextChunk> {
         let segments = self.split_recursively_into_segments(
             file_content,
             &self.delimiters, // Use the stored delimiters
@@ -337,7 +357,7 @@ impl TextContextBuilder {
             0, // Initial offset is 0
         );
 
-        let mut chunks: Vec<TextChunk<'_, 't>> = Vec::new();
+        let mut chunks: Vec<TextChunk> = Vec::new();
         let mut current_chunk_start_byte = 0;
         let mut current_chunk_end_byte = 0;
 
@@ -351,11 +371,12 @@ impl TextContextBuilder {
                 && current_chunk_start_byte != current_chunk_end_byte
             {
                 chunks.push(TextChunk {
-                    repo: self.repo.as_str(),
-                    path: self.path.as_str(),
+                    repo: self.repo.clone(),
+                    path: self.path.clone(),
                     sequence: chunks.len(),
-                    file_content,
-                    chunk_text: &file_content[current_chunk_start_byte..current_chunk_end_byte],
+                    file_content: file_content.to_string(),
+                    chunk_text: file_content[current_chunk_start_byte..current_chunk_end_byte]
+                        .to_string(),
                 });
                 current_chunk_start_byte = segment_range.start;
                 current_chunk_end_byte = segment_range.end;
@@ -372,11 +393,12 @@ impl TextContextBuilder {
         // Add the last chunk if it's not empty
         if current_chunk_start_byte != current_chunk_end_byte {
             chunks.push(TextChunk {
-                repo: self.repo.as_str(),
-                path: self.path.as_str(),
+                repo: self.repo.clone(),
+                path: self.path.clone(),
                 sequence: chunks.len(),
-                file_content,
-                chunk_text: &file_content[current_chunk_start_byte..current_chunk_end_byte],
+                file_content: file_content.to_string(),
+                chunk_text: file_content[current_chunk_start_byte..current_chunk_end_byte]
+                    .to_string(),
             });
         }
 
@@ -457,7 +479,7 @@ impl TextContextBuilder {
     }
 }
 
-impl<'builder, 't> TextChunk<'builder, 't> {
+impl TextChunk {
     /// Builds a formatted string representation of the text chunk, suitable for
     /// use as a context passage in retrieval models.
     ///
@@ -506,6 +528,11 @@ impl<'builder, 't> TextChunk<'builder, 't> {
             "passage: {{\"repo\": \"{}\", \"path\": \"{}\"}}\n\nfocus: {{}}\n{}",
             self.repo, self.path, self.chunk_text
         )
+    }
+
+    /// Get the formatted summary (same as build) for backwards compatibility
+    pub fn summary(&self) -> String {
+        self.build()
     }
 }
 
@@ -556,7 +583,7 @@ mod tests {
         assert!(chunks[last_chunk_idx].chunk_text.len() <= max_chunk_length);
 
         // Verify that concatenating chunks reconstructs the original content
-        let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text).collect();
+        let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text.as_str()).collect();
         assert_eq!(reconstructed_content, file_content);
     }
 
@@ -631,7 +658,7 @@ Another paragraph.
         let chunks = builder.get_chunks(file_content);
 
         assert!(!chunks.is_empty());
-        let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text).collect();
+        let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text.as_str()).collect();
         assert_eq!(reconstructed_content, file_content);
 
         for chunk in &chunks {

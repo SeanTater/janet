@@ -138,13 +138,13 @@ impl ChunkStore for SqliteStore {
         let like_pattern = format!("%{escaped_term}%");
 
         let query = if case_sensitive {
-            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
-             FROM chunks 
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
+             FROM chunks
              WHERE content LIKE ? ESCAPE '\\'
              ORDER BY relative_path, line_start"
         } else {
-            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
-             FROM chunks 
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
+             FROM chunks
              WHERE content LIKE ? COLLATE NOCASE ESCAPE '\\'
              ORDER BY relative_path, line_start"
         };

@@ -15,7 +15,7 @@ use janet_ai_retriever::retrieval::{
     indexing_engine::{IndexingEngine, IndexingEngineConfig},
     indexing_mode::IndexingMode,
 };
-use std::path::PathBuf;
+use std::path::Path;
 use tempfile::tempdir;
 use tokio::time::Duration;
 
@@ -117,13 +117,10 @@ async fn main() -> Result<()> {
     ];
 
     for (description, search_term) in search_queries {
-        println!(
-            "\n🔎 Searching for {} (keyword: '{}')",
-            description, search_term
-        );
+        println!("\n🔎 Searching for {description} (keyword: '{search_term}')");
 
         // Perform text-based search using the ChunkStore trait
-        use janet_ai_retriever::storage::{sqlite_store::SqliteStore, ChunkStore};
+        use janet_ai_retriever::storage::{ChunkStore, sqlite_store::SqliteStore};
         let store = SqliteStore::new(enhanced_index.file_index().clone());
         let search_results = store.search_text(search_term, false).await?;
 
@@ -140,7 +137,7 @@ async fn main() -> Result<()> {
             // Show a preview of the content (first 100 chars)
             let preview = chunk.content.chars().take(100).collect::<String>();
             let preview = if chunk.content.len() > 100 {
-                format!("{}...", preview)
+                format!("{preview}...")
             } else {
                 preview
             };
@@ -148,7 +145,7 @@ async fn main() -> Result<()> {
         }
 
         if search_results.is_empty() {
-            println!("   ⚠️  No results found for '{}'", search_term);
+            println!("   ⚠️  No results found for '{search_term}'");
         }
     }
 
@@ -166,17 +163,13 @@ async fn main() -> Result<()> {
 }
 
 /// Create realistic test files with various content types
-async fn create_test_files(repo_path: &PathBuf) -> Result<()> {
+async fn create_test_files(repo_path: &Path) -> Result<()> {
     // Create a simple Rust library with multiple modules
     let src_dir = repo_path.join("src");
     tokio::fs::create_dir_all(&src_dir).await?;
 
     // Main library file
-    tokio::fs::write(
-        src_dir.join("lib.rs"),
-        include_str!("test_data/src/lib.rs"),
-    )
-    .await?;
+    tokio::fs::write(src_dir.join("lib.rs"), include_str!("test_data/src/lib.rs")).await?;
 
     // Math module
     tokio::fs::write(
@@ -214,11 +207,7 @@ async fn create_test_files(repo_path: &PathBuf) -> Result<()> {
     .await?;
 
     // Create a JavaScript file
-    tokio::fs::write(
-        repo_path.join("api.js"),
-        include_str!("test_data/api.js"),
-    )
-    .await?;
+    tokio::fs::write(repo_path.join("api.js"), include_str!("test_data/api.js")).await?;
 
     // Create a README file
     tokio::fs::write(

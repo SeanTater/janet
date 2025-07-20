@@ -1,9 +1,9 @@
 //! A sample Rust library demonstrating various programming concepts
 
-pub mod math;
-pub mod http;
-pub mod database;
 pub mod auth;
+pub mod database;
+pub mod http;
+pub mod math;
 
 use std::collections::HashMap;
 
@@ -28,14 +28,14 @@ impl Config {
 /// Initialize the application with the given configuration
 pub fn initialize_app(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     println!("Initializing application...");
-    
+
     if config.debug_mode {
         println!("Debug mode enabled");
     }
-    
+
     database::connect(&config.database_url)?;
     auth::setup_auth_system(&config.api_key)?;
-    
+
     println!("Application initialized successfully");
     Ok(())
 }

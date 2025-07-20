@@ -24,11 +24,7 @@ pub struct EmbeddingModelMetadata {
 }
 
 impl EmbeddingModelMetadata {
-    pub fn new(
-        model_name: String,
-        provider: String,
-        dimension: usize,
-    ) -> Self {
+    pub fn new(model_name: String, provider: String, dimension: usize) -> Self {
         Self {
             model_name,
             provider,
@@ -38,32 +34,30 @@ impl EmbeddingModelMetadata {
             config: HashMap::new(),
         }
     }
-    
+
     pub fn with_version(mut self, version: String) -> Self {
         self.model_version = Some(version);
         self
     }
-    
+
     pub fn with_normalized(mut self, normalized: bool) -> Self {
         self.normalized = normalized;
         self
     }
-    
+
     pub fn with_config(mut self, key: String, value: String) -> Self {
         self.config.insert(key, value);
         self
     }
-    
+
     /// Create a unique identifier for this model configuration
     pub fn model_id(&self) -> String {
         let version_part = self.model_version.as_deref().unwrap_or("latest");
         let normalized_part = if self.normalized { "norm" } else { "raw" };
-        format!("{}:{}:{}:{}:{}", 
-                self.provider, 
-                self.model_name, 
-                version_part,
-                self.dimension,
-                normalized_part)
+        format!(
+            "{}:{}:{}:{}:{}",
+            self.provider, self.model_name, version_part, self.dimension, normalized_part
+        )
     }
 }
 
@@ -102,17 +96,17 @@ impl IndexMetadata {
             metadata: HashMap::new(),
         }
     }
-    
+
     pub fn with_embedding_model(mut self, model: EmbeddingModelMetadata) -> Self {
         self.embedding_model = Some(model);
         self
     }
-    
+
     pub fn with_metadata(mut self, key: String, value: String) -> Self {
         self.metadata.insert(key, value);
         self
     }
-    
+
     pub fn update_timestamp(&mut self) {
         self.updated_at = chrono::Utc::now().timestamp();
     }
@@ -129,34 +123,34 @@ impl EnhancedFileIndex {
     pub async fn open(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open(base).await?;
         let pool = file_index.pool().clone();
-        
+
         let enhanced = Self {
             file_index,
             pool: pool.clone(),
         };
-        
+
         // Create additional tables for metadata
         enhanced.create_metadata_tables().await?;
-        
+
         Ok(enhanced)
     }
-    
+
     /// Create a new enhanced file index using in-memory database (for testing)
     pub async fn open_memory(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open_memory(base).await?;
         let pool = file_index.pool().clone();
-        
+
         let enhanced = Self {
             file_index,
             pool: pool.clone(),
         };
-        
+
         // Create additional tables for metadata
         enhanced.create_metadata_tables().await?;
-        
+
         Ok(enhanced)
     }
-    
+
     /// Create metadata tables
     async fn create_metadata_tables(&self) -> Result<()> {
         // Create index metadata table
@@ -177,7 +171,7 @@ impl EnhancedFileIndex {
         )
         .execute(&self.pool)
         .await?;
-        
+
         // Create embedding models table
         sqlx::query(
             r#"
@@ -195,41 +189,41 @@ impl EnhancedFileIndex {
         )
         .execute(&self.pool)
         .await?;
-        
+
         // Add model_id column to chunks table if it doesn't exist
         let add_model_id_result = sqlx::query(
-            "ALTER TABLE chunks ADD COLUMN model_id TEXT REFERENCES embedding_models(model_id)"
+            "ALTER TABLE chunks ADD COLUMN model_id TEXT REFERENCES embedding_models(model_id)",
         )
         .execute(&self.pool)
         .await;
-        
+
         // Ignore error if column already exists
         if let Err(e) = add_model_id_result {
             if !e.to_string().contains("duplicate column name") {
                 return Err(e.into());
             }
         }
-        
+
         // Create index on model_id
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_chunks_model_id ON chunks(model_id)")
             .execute(&self.pool)
             .await?;
-        
+
         Ok(())
     }
-    
+
     /// Get the underlying FileIndex for compatibility
     pub fn file_index(&self) -> &FileIndex {
         &self.file_index
     }
-    
+
     /// Initialize or update index metadata
     pub async fn upsert_index_metadata(&self, metadata: &IndexMetadata) -> Result<()> {
         let metadata_json = serde_json::to_string(&metadata.metadata)?;
-        
+
         sqlx::query(
             r#"
-            INSERT INTO index_metadata 
+            INSERT INTO index_metadata
             (repository, retriever_version, context_version, embed_version, created_at, updated_at, metadata_json)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT(repository) DO UPDATE SET
@@ -249,24 +243,22 @@ impl EnhancedFileIndex {
         .bind(metadata_json)
         .execute(&self.pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     /// Get index metadata for a repository
     pub async fn get_index_metadata(&self, repository: &str) -> Result<Option<IndexMetadata>> {
-        let row = sqlx::query(
-            "SELECT * FROM index_metadata WHERE repository = ?1"
-        )
-        .bind(repository)
-        .fetch_optional(&self.pool)
-        .await?;
-        
+        let row = sqlx::query("SELECT * FROM index_metadata WHERE repository = ?1")
+            .bind(repository)
+            .fetch_optional(&self.pool)
+            .await?;
+
         if let Some(row) = row {
             let metadata_json: String = row.get("metadata_json");
-            let metadata: HashMap<String, String> = serde_json::from_str(&metadata_json)
-                .unwrap_or_default();
-            
+            let metadata: HashMap<String, String> =
+                serde_json::from_str(&metadata_json).unwrap_or_default();
+
             Ok(Some(IndexMetadata {
                 retriever_version: row.get("retriever_version"),
                 context_version: row.get("context_version"),
@@ -281,14 +273,14 @@ impl EnhancedFileIndex {
             Ok(None)
         }
     }
-    
+
     /// Register an embedding model
     pub async fn register_embedding_model(&self, model: &EmbeddingModelMetadata) -> Result<()> {
         let config_json = serde_json::to_string(&model.config)?;
-        
+
         sqlx::query(
             r#"
-            INSERT INTO embedding_models 
+            INSERT INTO embedding_models
             (model_id, model_name, provider, dimension, model_version, normalized, config_json)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT(model_id) DO UPDATE SET
@@ -309,24 +301,25 @@ impl EnhancedFileIndex {
         .bind(config_json)
         .execute(&self.pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     /// Get embedding model metadata by ID
-    pub async fn get_embedding_model(&self, model_id: &str) -> Result<Option<EmbeddingModelMetadata>> {
-        let row = sqlx::query(
-            "SELECT * FROM embedding_models WHERE model_id = ?1"
-        )
-        .bind(model_id)
-        .fetch_optional(&self.pool)
-        .await?;
-        
+    pub async fn get_embedding_model(
+        &self,
+        model_id: &str,
+    ) -> Result<Option<EmbeddingModelMetadata>> {
+        let row = sqlx::query("SELECT * FROM embedding_models WHERE model_id = ?1")
+            .bind(model_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
         if let Some(row) = row {
             let config_json: String = row.get("config_json");
-            let config: HashMap<String, String> = serde_json::from_str(&config_json)
-                .unwrap_or_default();
-                
+            let config: HashMap<String, String> =
+                serde_json::from_str(&config_json).unwrap_or_default();
+
             Ok(Some(EmbeddingModelMetadata {
                 model_name: row.get("model_name"),
                 provider: row.get("provider"),
@@ -339,19 +332,19 @@ impl EnhancedFileIndex {
             Ok(None)
         }
     }
-    
+
     /// Get all registered embedding models
     pub async fn get_all_embedding_models(&self) -> Result<Vec<EmbeddingModelMetadata>> {
         let rows = sqlx::query("SELECT * FROM embedding_models ORDER BY created_at DESC")
             .fetch_all(&self.pool)
             .await?;
-        
+
         let mut models = Vec::new();
         for row in rows {
             let config_json: String = row.get("config_json");
-            let config: HashMap<String, String> = serde_json::from_str(&config_json)
-                .unwrap_or_default();
-                
+            let config: HashMap<String, String> =
+                serde_json::from_str(&config_json).unwrap_or_default();
+
             models.push(EmbeddingModelMetadata {
                 model_name: row.get("model_name"),
                 provider: row.get("provider"),
@@ -361,24 +354,24 @@ impl EnhancedFileIndex {
                 config,
             });
         }
-        
+
         Ok(models)
     }
-    
+
     /// Insert chunks with model metadata
     pub async fn upsert_chunks_with_model(
-        &self, 
+        &self,
         chunks: &[ChunkRef],
         model_id: &str,
     ) -> Result<()> {
         let mut tx = self.pool.begin().await?;
-        
+
         for chunk in chunks {
             let embedding_bytes = chunk
                 .embedding
                 .as_ref()
                 .map(|e| bytemuck::cast_slice::<half::f16, u8>(e));
-            
+
             sqlx::query(
                 r#"
                 INSERT INTO chunks (file_hash, relative_path, line_start, line_end, content, embedding, model_id)
@@ -400,21 +393,21 @@ impl EnhancedFileIndex {
             .execute(&mut *tx)
             .await?;
         }
-        
+
         tx.commit().await?;
         Ok(())
     }
-    
+
     /// Get chunks by model ID
     pub async fn get_chunks_by_model(&self, model_id: &str) -> Result<Vec<ChunkRef>> {
         let rows = sqlx::query(
-            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
-             FROM chunks WHERE model_id = ?1 ORDER BY relative_path, line_start"
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
+             FROM chunks WHERE model_id = ?1 ORDER BY relative_path, line_start",
         )
         .bind(model_id)
         .fetch_all(&self.pool)
         .await?;
-        
+
         let mut chunks = Vec::new();
         for row in rows {
             let id: i64 = row.get("id");
@@ -424,13 +417,13 @@ impl EnhancedFileIndex {
             let line_end: i64 = row.get("line_end");
             let content: String = row.get("content");
             let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
-            
+
             let mut file_hash = [0u8; 32];
             file_hash.copy_from_slice(&file_hash_bytes[..32]);
-            
-            let embedding = embedding_bytes
-                .map(|bytes| bytemuck::cast_slice::<u8, half::f16>(&bytes).to_vec());
-            
+
+            let embedding =
+                embedding_bytes.map(|bytes| bytemuck::cast_slice::<u8, half::f16>(&bytes).to_vec());
+
             chunks.push(ChunkRef {
                 id: Some(id),
                 file_hash,
@@ -441,10 +434,10 @@ impl EnhancedFileIndex {
                 embedding,
             });
         }
-        
+
         Ok(chunks)
     }
-    
+
     /// Check for embedding model compatibility
     pub async fn check_model_compatibility(
         &self,
@@ -459,7 +452,7 @@ impl EnhancedFileIndex {
             Ok(true)
         }
     }
-    
+
     /// Delete chunks by model ID (useful when changing embedding models)
     pub async fn delete_chunks_by_model(&self, model_id: &str) -> Result<usize> {
         let result = sqlx::query("DELETE FROM chunks WHERE model_id = ?1")
@@ -468,21 +461,25 @@ impl EnhancedFileIndex {
             .await?;
         Ok(result.rows_affected() as usize)
     }
-    
+
     /// Search for similar chunks using embedding similarity
-    pub async fn search_similar_chunks(&self, query_embedding: &[half::f16], limit: usize) -> Result<Vec<ChunkRef>> {
+    pub async fn search_similar_chunks(
+        &self,
+        query_embedding: &[half::f16],
+        limit: usize,
+    ) -> Result<Vec<ChunkRef>> {
         // For now, implement a simple cosine similarity search in Rust
         // In a production system, you might want to use a vector database
-        
+
         let rows = sqlx::query(
-            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding 
-             FROM chunks WHERE embedding IS NOT NULL ORDER BY id"
+            "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
+             FROM chunks WHERE embedding IS NOT NULL ORDER BY id",
         )
         .fetch_all(&self.pool)
         .await?;
-        
+
         let mut similarities: Vec<(f32, ChunkRef)> = Vec::new();
-        
+
         for row in rows {
             let id: i64 = row.get("id");
             let file_hash_bytes: Vec<u8> = row.get("file_hash");
@@ -491,16 +488,17 @@ impl EnhancedFileIndex {
             let line_end: i64 = row.get("line_end");
             let content: String = row.get("content");
             let embedding_bytes: Option<Vec<u8>> = row.get("embedding");
-            
+
             if let Some(embedding_bytes) = embedding_bytes {
-                let chunk_embedding: Vec<half::f16> = bytemuck::cast_slice::<u8, half::f16>(&embedding_bytes).to_vec();
-                
+                let chunk_embedding: Vec<half::f16> =
+                    bytemuck::cast_slice::<u8, half::f16>(&embedding_bytes).to_vec();
+
                 // Calculate cosine similarity
                 let similarity = calculate_cosine_similarity(query_embedding, &chunk_embedding);
-                
+
                 let mut file_hash = [0u8; 32];
                 file_hash.copy_from_slice(&file_hash_bytes[..32]);
-                
+
                 let chunk_ref = ChunkRef {
                     id: Some(id),
                     file_hash,
@@ -510,15 +508,15 @@ impl EnhancedFileIndex {
                     content,
                     embedding: Some(chunk_embedding),
                 };
-                
+
                 similarities.push((similarity, chunk_ref));
             }
         }
-        
+
         // Sort by similarity (descending) and take the top results
         similarities.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         similarities.truncate(limit);
-        
+
         Ok(similarities.into_iter().map(|(_, chunk)| chunk).collect())
     }
 
@@ -527,19 +525,20 @@ impl EnhancedFileIndex {
         let files_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM files")
             .fetch_one(&self.pool)
             .await?;
-            
+
         let chunks_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chunks")
             .fetch_one(&self.pool)
             .await?;
-            
-        let embeddings_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL")
-            .fetch_one(&self.pool)
-            .await?;
-            
+
+        let embeddings_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL")
+                .fetch_one(&self.pool)
+                .await?;
+
         let models_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM embedding_models")
             .fetch_one(&self.pool)
             .await?;
-        
+
         Ok(IndexStats {
             files_count: files_count as usize,
             chunks_count: chunks_count as usize,
@@ -555,7 +554,8 @@ fn calculate_cosine_similarity(a: &[half::f16], b: &[half::f16]) -> f32 {
         return 0.0;
     }
 
-    let dot_product: f32 = a.iter()
+    let dot_product: f32 = a
+        .iter()
         .zip(b.iter())
         .map(|(x, y)| f32::from(*x) * f32::from(*y))
         .sum();
@@ -582,7 +582,7 @@ pub struct IndexStats {
 // Implement Deref to allow transparent access to FileIndex methods
 impl std::ops::Deref for EnhancedFileIndex {
     type Target = FileIndex;
-    
+
     fn deref(&self) -> &Self::Target {
         &self.file_index
     }
@@ -592,61 +592,61 @@ impl std::ops::Deref for EnhancedFileIndex {
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    
+
     #[tokio::test]
     async fn test_enhanced_index_creation() -> Result<()> {
         let temp_dir = tempdir()?;
         let index = EnhancedFileIndex::open_memory(temp_dir.path()).await?;
-        
+
         // Should be able to access underlying FileIndex methods
         let stats = index.get_index_stats().await?;
         assert_eq!(stats.files_count, 0);
         assert_eq!(stats.chunks_count, 0);
-        
+
         Ok(())
     }
-    
+
     #[tokio::test]
     async fn test_embedding_model_registration() -> Result<()> {
         let temp_dir = tempdir()?;
         let index = EnhancedFileIndex::open_memory(temp_dir.path()).await?;
-        
-        let model = EmbeddingModelMetadata::new(
-            "test-model".to_string(),
-            "test-provider".to_string(),
-            384,
-        )
-        .with_normalized(true)
-        .with_config("batch_size".to_string(), "16".to_string());
-        
+
+        let model =
+            EmbeddingModelMetadata::new("test-model".to_string(), "test-provider".to_string(), 384)
+                .with_normalized(true)
+                .with_config("batch_size".to_string(), "16".to_string());
+
         index.register_embedding_model(&model).await?;
-        
+
         let retrieved = index.get_embedding_model(&model.model_id()).await?;
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.model_name, "test-model");
         assert_eq!(retrieved.dimension, 384);
         assert!(retrieved.normalized);
-        
+
         Ok(())
     }
-    
+
     #[tokio::test]
     async fn test_index_metadata() -> Result<()> {
         let temp_dir = tempdir()?;
         let index = EnhancedFileIndex::open_memory(temp_dir.path()).await?;
-        
+
         let metadata = IndexMetadata::new("test-repo".to_string())
             .with_metadata("test_key".to_string(), "test_value".to_string());
-        
+
         index.upsert_index_metadata(&metadata).await?;
-        
+
         let retrieved = index.get_index_metadata("test-repo").await?;
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.repository, "test-repo");
-        assert_eq!(retrieved.metadata.get("test_key"), Some(&"test_value".to_string()));
-        
+        assert_eq!(
+            retrieved.metadata.get("test_key"),
+            Some(&"test_value".to_string())
+        );
+
         Ok(())
     }
 }

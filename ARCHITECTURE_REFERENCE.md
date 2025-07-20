@@ -89,7 +89,7 @@ The MCP server is designed with **clean JSON-RPC communication** as a first-clas
 @server.call_tool()
 async def call_tool(name: str, arguments: dict):
     # 1. Validate arguments and apply constraints
-    # 2. Queue operation through TaskCoordinator 
+    # 2. Queue operation through TaskCoordinator
     # 3. Execute with proper error handling
     # 4. Apply response size limiting
     # 5. Return structured JSON response
@@ -150,7 +150,7 @@ CREATE TABLE embeddings_1536 (
 );
 
 -- HNSW index for cosine similarity search
-CREATE INDEX idx_hnsw_1536 ON embeddings_1536 
+CREATE INDEX idx_hnsw_1536 ON embeddings_1536
 USING HNSW (embedding) WITH (similarity = cosine);
 ```
 
@@ -189,7 +189,7 @@ class SerialDatabaseProvider:
     def __init__(self, provider: DatabaseProvider):
         self._provider = provider
         self._executor = SerialExecutor()
-    
+
     async def execute(self, operation: str, *args):
         return await self._executor.execute(operation, *args)
 ```
@@ -217,7 +217,7 @@ class LanguageParser(Protocol):
 # Supported languages with specialized parsers
 SUPPORTED_LANGUAGES = {
     Language.PYTHON: PythonParser(),
-    Language.TYPESCRIPT: TypeScriptParser(), 
+    Language.TYPESCRIPT: TypeScriptParser(),
     Language.JAVA: JavaParser(),
     Language.CSHARP: CSharpParser(),
     # ... additional language support
@@ -228,7 +228,7 @@ SUPPORTED_LANGUAGES = {
 ```python
 class ChunkType(Enum):
     FUNCTION = "function"
-    CLASS = "class" 
+    CLASS = "class"
     METHOD = "method"
     INTERFACE = "interface"
     ENUM = "enum"
@@ -244,14 +244,14 @@ class ChunkType(Enum):
 ```python
 class SearchService:
     async def search_semantic(
-        self, 
+        self,
         query_vector: list[float],
         provider: str,
         model: str,
         threshold: float = None,
         path_filter: str = None
     ) -> tuple[list[SearchResult], PaginationInfo]: ...
-    
+
     async def search_regex(
         self,
         pattern: str,
@@ -263,11 +263,11 @@ class SearchService:
 ```python
 class EmbeddingService:
     async def generate_embeddings(
-        self, 
-        texts: list[str], 
+        self,
+        texts: list[str],
         provider: str = "openai"
     ) -> EmbeddingResult: ...
-    
+
     def register_provider(self, provider: EmbeddingProvider): ...
     def list_providers(self) -> list[str]: ...
 ```
@@ -284,7 +284,7 @@ class FileWatcherManager:
     def __init__(self):
         self._watchers: dict[Path, FileWatcher] = {}
         self._event_handler = ChunkHoundEventHandler()
-        
+
     async def initialize(self, callback: Callable[[Path, str], None]):
         # 1. Setup watchdog observers for each watch path
         # 2. Configure event filtering and buffering
@@ -312,8 +312,8 @@ class TaskPriority(IntEnum):
 
 class TaskCoordinator:
     async def queue_task(
-        self, 
-        priority: TaskPriority, 
+        self,
+        priority: TaskPriority,
         task: Callable
     ) -> Any:
         # Ensures search operations are never blocked by file processing
@@ -360,7 +360,7 @@ def validate_for_command(self, command: str) -> list[str]:
 CHUNKHOUND_DATABASE__PATH="/path/to/chunkhound.db"
 CHUNKHOUND_DATABASE__PROVIDER="duckdb"
 
-# Embedding configuration  
+# Embedding configuration
 CHUNKHOUND_EMBEDDING__PROVIDER="openai"
 CHUNKHOUND_EMBEDDING__API_KEY="sk-..."
 CHUNKHOUND_EMBEDDING__MODEL="text-embedding-3-small"
@@ -376,16 +376,16 @@ CHUNKHOUND_WATCH_ENABLED="true"
 ```python
 def find_project_root(start_path: Path = None) -> Path:
     """Find project root by looking for indicators"""
-    indicators = [".git", "pyproject.toml", "package.json", 
+    indicators = [".git", "pyproject.toml", "package.json",
                   "Cargo.toml", "go.mod", ".chunkhound.json"]
-    
+
     # Walk up directory tree until indicator found
     current = start_path or Path.cwd()
     while current != current.parent:
         if any((current / indicator).exists() for indicator in indicators):
             return current
         current = current.parent
-    
+
     return start_path or Path.cwd()
 ```
 
@@ -473,11 +473,11 @@ async def process_files_batch(self, files: list[Path], batch_size: int = 10):
     """Process files in batches to optimize database operations"""
     for i in range(0, len(files), batch_size):
         batch = files[i:i + batch_size]
-        
+
         # Yield control every 50 files for responsiveness
         if i % 50 == 0:
             await asyncio.sleep(0)
-        
+
         await self._process_batch(batch)
 ```
 
@@ -488,10 +488,10 @@ async def bulk_update_with_index_optimization(self, chunks: list[Chunk]):
     try:
         # 1. Drop expensive HNSW indexes
         await self._drop_vector_indexes()
-        
+
         # 2. Perform bulk operations
         await self._insert_chunks_bulk(chunks)
-        
+
         # 3. Recreate indexes
         await self._create_vector_indexes()
     except Exception:
@@ -508,7 +508,7 @@ class ConnectionManager:
     def __init__(self, max_connections: int = 10):
         self._pool: asyncio.Queue[Connection] = asyncio.Queue(max_connections)
         self._active_connections: set[Connection] = set()
-    
+
     async def get_connection(self) -> Connection:
         try:
             return self._pool.get_nowait()
@@ -523,15 +523,15 @@ async def cleanup(self):
     # 1. Stop background tasks
     if self._periodic_indexer:
         await self._periodic_indexer.stop()
-    
+
     # 2. Drain task queues
     if self._task_coordinator:
         await self._task_coordinator.stop()
-    
+
     # 3. Close database connections
     if self._database:
         self._database.disconnect()
-    
+
     # 4. Cleanup temporary files
     self._cleanup_temp_files()
 ```
@@ -549,10 +549,10 @@ async def test_database():
     """Create isolated test database"""
     db_path = Path(tempfile.mkdtemp()) / "test.db"
     config = DatabaseConfig(path=str(db_path), provider="duckdb")
-    
+
     database = create_database_with_dependencies(db_path, config)
     yield database
-    
+
     # Cleanup
     database.disconnect()
     shutil.rmtree(db_path.parent)
@@ -566,7 +566,7 @@ async def test_mcp_server_initialization():
         # Verify all services initialized
         assert context["db"] is not None
         assert context["embeddings"] is not None
-        
+
         # Test tool availability
         tools = await list_tools()
         tool_names = {tool.name for tool in tools}
@@ -583,13 +583,13 @@ def debug_log(event_type: str, **data):
     if os.environ.get("CHUNKHOUND_DEBUG_MODE") == "1":
         debug_file = Path(".mem/debug/chunkhound-debug.jsonl")
         debug_file.parent.mkdir(parents=True, exist_ok=True)
-        
+
         entry = {
             "timestamp": time.time(),
             "event": event_type,
             "data": data
         }
-        
+
         with open(debug_file, "a") as f:
             f.write(json.dumps(entry) + "\n")
 ```
@@ -600,7 +600,7 @@ def validate_configuration():
     """Validate configuration before server startup"""
     config = Config()
     errors = config.validate_for_command("mcp")
-    
+
     if errors:
         print("Configuration errors:", file=sys.stderr)
         for error in errors:

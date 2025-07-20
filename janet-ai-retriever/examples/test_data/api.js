@@ -1,6 +1,6 @@
 /**
  * RESTful API client for interacting with web services.
- * 
+ *
  * This module provides a comprehensive HTTP client with support for
  * authentication, request/response interceptors, and error handling.
  */
@@ -100,7 +100,7 @@ class ApiClient {
      */
     async request(method, endpoint, data, options = {}) {
         const fullURL = new URL(endpoint, this.baseURL);
-        
+
         let requestOptions = {
             method,
             headers: { ...this.defaultHeaders, ...options.headers },
@@ -114,7 +114,7 @@ class ApiClient {
 
         try {
             const response = await this.makeHttpRequest(fullURL, requestOptions);
-            
+
             // Apply response interceptors
             let processedResponse = response;
             for (const interceptor of this.interceptors.response) {
@@ -136,18 +136,18 @@ class ApiClient {
     makeHttpRequest(url, options) {
         return new Promise((resolve, reject) => {
             const protocol = url.protocol === 'https:' ? https : http;
-            
+
             const request = protocol.request(url, {
                 method: options.method,
                 headers: options.headers,
                 timeout: this.timeout
             }, (response) => {
                 let data = '';
-                
+
                 response.on('data', (chunk) => {
                     data += chunk;
                 });
-                
+
                 response.on('end', () => {
                     try {
                         const parsedData = JSON.parse(data);
@@ -220,13 +220,13 @@ class ApiUtils {
      */
     static buildQueryString(params) {
         const searchParams = new URLSearchParams();
-        
+
         for (const [key, value] of Object.entries(params)) {
             if (value !== null && value !== undefined) {
                 searchParams.append(key, String(value));
             }
         }
-        
+
         return searchParams.toString();
     }
 
@@ -237,11 +237,11 @@ class ApiUtils {
      */
     static parseHeaders(headers) {
         const parsed = {};
-        
+
         for (const [key, value] of Object.entries(headers)) {
             parsed[key.toLowerCase()] = value;
         }
-        
+
         return parsed;
     }
 

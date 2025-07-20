@@ -1,12 +1,12 @@
 //! Mathematical utility functions
 
 /// Add two numbers together
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use mylib::math::add;
-/// 
+///
 /// assert_eq!(add(2, 3), 5);
 /// ```
 pub fn add(a: i32, b: i32) -> i32 {
@@ -24,9 +24,9 @@ pub fn multiply(a: i32, b: i32) -> i32 {
 }
 
 /// Divide the first number by the second
-/// 
+///
 /// # Panics
-/// 
+///
 /// Panics if the divisor is zero.
 pub fn divide(a: i32, b: i32) -> i32 {
     if b == 0 {

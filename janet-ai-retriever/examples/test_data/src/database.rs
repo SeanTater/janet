@@ -59,7 +59,7 @@ impl DatabaseConnection {
     /// Execute a SQL query and return results
     pub async fn query(&self, sql: &str) -> Result<QueryResult, DatabaseError> {
         println!("Executing query on connection {}: {}", self.id, sql);
-        
+
         // Mock implementation
         Ok(QueryResult {
             rows: vec![],
@@ -69,9 +69,13 @@ impl DatabaseConnection {
 
     /// Execute a prepared statement with parameters
     pub async fn execute(&self, sql: &str, params: &[&str]) -> Result<QueryResult, DatabaseError> {
-        println!("Executing prepared statement on connection {}: {} with {} params", 
-                self.id, sql, params.len());
-        
+        println!(
+            "Executing prepared statement on connection {}: {} with {} params",
+            self.id,
+            sql,
+            params.len()
+        );
+
         // Mock implementation
         Ok(QueryResult {
             rows: vec![],
@@ -102,13 +106,19 @@ pub struct DatabaseTransaction {
 impl DatabaseTransaction {
     /// Commit the transaction
     pub async fn commit(self) -> Result<(), DatabaseError> {
-        println!("Committing transaction on connection {}", self.connection_id);
+        println!(
+            "Committing transaction on connection {}",
+            self.connection_id
+        );
         Ok(())
     }
 
     /// Rollback the transaction
     pub async fn rollback(self) -> Result<(), DatabaseError> {
-        println!("Rolling back transaction on connection {}", self.connection_id);
+        println!(
+            "Rolling back transaction on connection {}",
+            self.connection_id
+        );
         Ok(())
     }
 }
