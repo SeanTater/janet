@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::Stdio;
 use tempfile::tempdir;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::time::{Duration, timeout};
 
@@ -29,6 +29,7 @@ async fn test_mcp_initialize() {
     let temp_dir = tempdir().expect("Failed to create temp directory");
 
     // Start the MCP server process
+    println!("Starting MCP server with cargo run...");
     let mut child = Command::new("cargo")
         .args(["run", "--", "--root", temp_dir.path().to_str().unwrap()])
         .stdin(Stdio::piped())
@@ -36,6 +37,10 @@ async fn test_mcp_initialize() {
         .stderr(Stdio::piped())
         .spawn()
         .expect("Failed to start MCP server");
+
+    // Give the server a moment to start up (longer in CI)
+    println!("Waiting for server to start...");
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let stdin = child.stdin.as_mut().expect("Failed to get stdin");
     let stdout = child.stdout.as_mut().expect("Failed to get stdout");
@@ -45,15 +50,18 @@ async fn test_mcp_initialize() {
     let initialize_request = r#"{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test-client", "version": "1.0.0"}}}
 "#;
 
+    println!("Sending initialize request: {}", initialize_request.trim());
     stdin
         .write_all(initialize_request.as_bytes())
         .await
         .expect("Failed to write initialize request");
     stdin.flush().await.expect("Failed to flush stdin");
+    println!("Request sent successfully");
 
     // Read initialize response with longer timeout for CI
+    println!("Waiting for response...");
     let mut response = String::new();
-    let read_result = timeout(Duration::from_secs(30), reader.read_line(&mut response)).await;
+    let read_result = timeout(Duration::from_secs(20), reader.read_line(&mut response)).await;
 
     match read_result {
         Ok(Ok(_)) => {
@@ -69,9 +77,36 @@ async fn test_mcp_initialize() {
         Err(_timeout_err) => {
             // Check if child process is still running
             if let Ok(Some(exit_status)) = child.try_wait() {
-                panic!("MCP server exited early with status: {exit_status}");
+                // Server exited - capture stderr for debugging
+                let stderr = child.stderr.take().unwrap();
+                let mut stderr_reader = BufReader::new(stderr);
+                let mut stderr_output = String::new();
+                let _ = stderr_reader.read_to_string(&mut stderr_output).await;
+                panic!(
+                    "MCP server exited early with status: {exit_status}\nStderr: {stderr_output}"
+                );
             } else {
-                panic!("Timeout waiting for initialize response (server still running)");
+                // Server still running but not responding - this might be a deadlock or compilation hang
+                println!("Server process still running, attempting to capture stderr...");
+
+                // Try to read any stderr output that might indicate what's wrong
+                if let Some(stderr) = child.stderr.as_mut() {
+                    let mut stderr_reader = BufReader::new(stderr);
+                    let mut stderr_output = String::new();
+                    // Try to read stderr with a short timeout
+                    if let Ok(Ok(_)) = timeout(
+                        Duration::from_secs(1),
+                        stderr_reader.read_to_string(&mut stderr_output),
+                    )
+                    .await
+                    {
+                        if !stderr_output.is_empty() {
+                            println!("Server stderr: {stderr_output}");
+                        }
+                    }
+                }
+
+                panic!("Timeout waiting for initialize response (server still running after 30s)");
             }
         }
     }
