@@ -17,10 +17,3 @@ repos:
       - id: clippy
         name: Rust clippy
         args: ['--all-targets', '--all-features', '--', '-D', 'warnings']
-
-  - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.0.0
-    hooks:
-      - id: conventional-pre-commit
-        stages: [commit-msg]
-        args: [feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert]
