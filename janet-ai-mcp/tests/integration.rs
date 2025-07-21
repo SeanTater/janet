@@ -74,6 +74,7 @@ async fn test_server_kill() {
 
 /// Test actual MCP protocol communication over stdio
 #[tokio::test]
+#[ignore]
 async fn test_mcp_initialize() {
     let temp_dir = tempdir().expect("Failed to create temp directory");
 

@@ -163,6 +163,14 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
 3. Advanced troubleshooting automation
 4. Integration testing utilities
 
+## Testing Infrastructure
+
+### Integration Tests
+- [ ] Re-enable MCP integration tests (`test_mcp_initialize` and `test_semantic_search_with_real_data`)
+  - Currently disabled due to CI failures
+  - Tests work locally but fail in CI environment
+  - Need to investigate CI-specific issues (timeouts, process spawning, etc.)
+
 ## API Design Considerations
 
 - All status functions should be fast (< 100ms) and cacheable
