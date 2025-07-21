@@ -413,11 +413,11 @@ async fn test_cli_error_message_quality() -> Result<()> {
 async fn test_cli_database_state_edge_cases() -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
-    // Create .code-assistant directory but no database file
-    let assist_dir = temp_dir.path().join(".code-assistant");
+    // Create .janet-ai directory but no database file
+    let assist_dir = temp_dir.path().join(".janet-ai");
     std::fs::create_dir_all(&assist_dir)?;
 
-    // Commands should fail gracefully when database doesn't exist (no .code-assistant dir)
+    // Commands should fail gracefully when database doesn't exist (no .janet-ai dir)
     let empty_temp_dir = tempfile::tempdir()?;
     let output = run_cli(&empty_temp_dir, &["stats"])?;
     assert!(!output.status.success());
