@@ -1,6 +1,7 @@
 # Janet AI MCP Server - TODO
 
 This document outlines enhancements needed in `janet-ai-retriever` and the MCP server to provide comprehensive status reporting and improved debugging capabilities.
+*These are all best-case scenarios* so don't go to great lengths to make every datum available if some are very inconvenient.
 
 ## janet-ai-retriever API Enhancements Needed
 
@@ -12,7 +13,6 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Index database size (bytes)
   - Last indexing operation timestamp
   - Index schema version
-  - Corruption check status
 
 - [ ] `get_indexing_status()` - Return current indexing operation status:
   - Is indexing currently running?
@@ -44,6 +44,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Model file size and location
   - Supported languages/domains
   - Normalization settings
+  - ONNX runtime details if available; especially whether we're using a GPU
 
 - [ ] `get_supported_file_types()` - Return list of file types that can be indexed
 
@@ -75,6 +76,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Files added but not yet indexed
   - Files deleted but still in index
   - Recommended reindex candidates
+  - These could be estimates, and might be made from the current queue
 
 ### Database & Storage
 - [ ] `get_database_info()` - Return database-specific information:
@@ -165,7 +167,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
 
 - All status functions should be fast (< 100ms) and cacheable
 - Functions should gracefully handle missing or corrupted index data
-- Return structured data (JSON/structs) rather than formatted strings when possible
+- Return structured data (JSON/structs) rather than formatted strings when possible, but a Debug or Display impl may be appropriate
 - Include timestamp metadata for cache invalidation
 - Provide both summary and detailed views for complex information
-- Support async operations for potentially slow operations (consistency checks)
+- Support async operations for potentially slow operations (consistency checks), but most ops shouldn't be slow anyway

@@ -4,10 +4,10 @@
 //! search capabilities across codebases. Integrates with janet-ai-retriever for file
 //! indexing and janet-ai-embed for semantic embeddings.
 
-pub mod server;
-pub mod tools;
+mod server;
+mod tools;
 
-pub use server::JanetMcpServer;
+use server::JanetMcpServer;
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -15,12 +15,16 @@ use tracing::info;
 
 /// Configuration for the Janet MCP server
 #[derive(Debug, Clone)]
-pub struct ServerConfig {
+struct ServerConfig {
     /// Root directory to search for files
-    pub root_dir: PathBuf,
+    root_dir: PathBuf,
 }
 
-impl Default for ServerConfig {
+impl ServerConfig {
+    fn new(root_dir: PathBuf) -> Self {
+        Self { root_dir }
+    }
+    
     fn default() -> Self {
         Self {
             root_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
@@ -28,8 +32,12 @@ impl Default for ServerConfig {
     }
 }
 
-/// Run the Janet MCP server with the given configuration
-pub async fn run_server(config: ServerConfig) -> Result<()> {
+/// Run the Janet MCP server with the given root directory
+pub async fn run_server(root_dir: Option<PathBuf>) -> Result<()> {
+    let config = match root_dir {
+        Some(dir) => ServerConfig::new(dir),
+        None => ServerConfig::default(),
+    };
     info!("Starting Janet MCP server");
 
     // Create the MCP server instance and serve with stdio

@@ -33,8 +33,8 @@ pub async fn semantic_search(
     let limit = request.limit.unwrap_or(10) as usize;
     let threshold = request.threshold.unwrap_or(0.7);
 
-    // Perform real semantic search - no fallbacks
-    match perform_real_semantic_search(config, &request.query, limit, threshold).await {
+    // Perform semantic search
+    match perform_semantic_search(config, &request.query, limit, threshold).await {
         Ok(results) => {
             if results.is_empty() {
                 Ok(format!(
@@ -87,8 +87,8 @@ pub async fn semantic_search(
     }
 }
 
-/// Attempt to perform real semantic search using the indexing engine
-async fn perform_real_semantic_search(
+/// Attempt to perform semantic search using the indexing engine
+async fn perform_semantic_search(
     config: &ServerConfig,
     query: &str,
     limit: usize,
@@ -96,8 +96,8 @@ async fn perform_real_semantic_search(
 ) -> AnyhowResult<Vec<(janet_ai_retriever::storage::Chunk, f32)>> {
     use half::f16;
 
-    // Try to load existing index from the root directory
-    let index_db_path = config.root_dir.join(".janet").join("index.db");
+    // Try to load existing index from the root directory (IndexingEngine creates it at .code-assistant)
+    let index_db_path = config.root_dir.join(".code-assistant").join("index.db");
 
     if !index_db_path.exists() {
         return Err(anyhow::anyhow!(
