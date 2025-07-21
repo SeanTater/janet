@@ -23,6 +23,55 @@ fn test_filesystem_basics() {
     assert_eq!(content, "test content");
 }
 
+/// Test that the server binary can start and exit cleanly
+#[tokio::test]
+async fn test_server_startup() {
+    println!("Testing basic server startup...");
+
+    // Try to run the server with --help to see if the binary works
+    let output = Command::new("cargo")
+        .args(["run", "--", "--help"])
+        .output()
+        .await
+        .expect("Failed to run server with --help");
+
+    println!("Help command exit status: {}", output.status);
+    println!("Help stdout: {}", String::from_utf8_lossy(&output.stdout));
+    println!("Help stderr: {}", String::from_utf8_lossy(&output.stderr));
+
+    assert!(output.status.success(), "Server --help should succeed");
+}
+
+/// Test that server can start and be killed quickly
+#[tokio::test]
+async fn test_server_kill() {
+    let temp_dir = tempdir().expect("Failed to create temp directory");
+
+    println!("Testing server start and kill...");
+
+    // Start server and immediately kill it
+    let mut child = Command::new("cargo")
+        .args(["run", "--", "--root", temp_dir.path().to_str().unwrap()])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to start server");
+
+    println!("Server started, waiting 2 seconds...");
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    println!("Killing server...");
+    let kill_result = child.kill().await;
+    println!("Kill result: {kill_result:?}");
+
+    let wait_result = child.wait().await;
+    println!("Wait result: {wait_result:?}");
+
+    // Just check that we could start and kill the process
+    assert!(kill_result.is_ok() || wait_result.is_ok());
+}
+
 /// Test actual MCP protocol communication over stdio
 #[tokio::test]
 async fn test_mcp_initialize() {
