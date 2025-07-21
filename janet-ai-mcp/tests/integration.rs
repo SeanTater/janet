@@ -51,18 +51,29 @@ async fn test_mcp_initialize() {
         .expect("Failed to write initialize request");
     stdin.flush().await.expect("Failed to flush stdin");
 
-    // Read initialize response with timeout
+    // Read initialize response with longer timeout for CI
     let mut response = String::new();
-    let read_result = timeout(Duration::from_secs(10), reader.read_line(&mut response)).await;
+    let read_result = timeout(Duration::from_secs(30), reader.read_line(&mut response)).await;
 
-    if let Ok(Ok(_)) = read_result {
-        println!("Initialize response: {response}");
-        // Basic check that we got a JSON response
-        assert!(response.contains("jsonrpc"));
-        assert!(response.contains("result"));
-        assert!(response.contains("Janet AI MCP Server"));
-    } else {
-        panic!("Failed to get initialize response within timeout");
+    match read_result {
+        Ok(Ok(_)) => {
+            println!("Initialize response: {response}");
+            // Basic check that we got a JSON response
+            assert!(response.contains("jsonrpc"));
+            assert!(response.contains("result"));
+            assert!(response.contains("Janet AI MCP Server"));
+        }
+        Ok(Err(io_err)) => {
+            panic!("IO error reading response: {io_err}");
+        }
+        Err(_timeout_err) => {
+            // Check if child process is still running
+            if let Ok(Some(exit_status)) = child.try_wait() {
+                panic!("MCP server exited early with status: {exit_status}");
+            } else {
+                panic!("Timeout waiting for initialize response (server still running)");
+            }
+        }
     }
 
     // Clean shutdown
