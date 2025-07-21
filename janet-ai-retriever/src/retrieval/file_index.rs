@@ -35,10 +35,7 @@ pub struct FileIndex {
 
 impl FileIndex {
     pub async fn open(base: &Path) -> Result<Self> {
-        let assist_dir = base.join(".code-assistant");
-        std::fs::create_dir_all(&assist_dir)?;
-
-        let db_path = assist_dir.join("index.db");
+        let db_path = base.join(".janet-ai.db");
         let database_url = format!("sqlite:{}", db_path.display());
 
         let pool = SqlitePool::connect(&database_url).await?;
