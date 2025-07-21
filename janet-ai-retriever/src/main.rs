@@ -389,6 +389,11 @@ async fn run() -> anyhow::Result<()> {
             let indexing_config = StatusApi::get_indexing_config(&config).await?;
             let model_info = StatusApi::get_embedding_model_info(None).await?;
             let supported_types = StatusApi::get_supported_file_types(&config).await?;
+            let database_info =
+                StatusApi::get_database_info(enhanced_index, &args.base_dir).await?;
+            let dependency_versions = StatusApi::get_dependency_versions().await?;
+            let consistency_report = StatusApi::validate_index_consistency(enhanced_index).await?;
+            let file_system_status = StatusApi::get_file_system_status(&config).await?;
 
             match format {
                 OutputFormat::Json => {
@@ -401,6 +406,10 @@ async fn run() -> anyhow::Result<()> {
                         embedding_model_info:
                             Option<janet_ai_retriever::status::EmbeddingModelInfo>,
                         supported_file_types: Vec<String>,
+                        database_info: janet_ai_retriever::status::DatabaseInfo,
+                        dependency_versions: janet_ai_retriever::status::DependencyVersions,
+                        consistency_report: janet_ai_retriever::status::IndexConsistencyReport,
+                        file_system_status: janet_ai_retriever::status::FileSystemStatus,
                     }
 
                     let output = StatusOutput {
@@ -410,6 +419,10 @@ async fn run() -> anyhow::Result<()> {
                         indexing_configuration: indexing_config,
                         embedding_model_info: model_info,
                         supported_file_types: supported_types,
+                        database_info,
+                        dependency_versions,
+                        consistency_report,
+                        file_system_status,
                     };
 
                     println!("{}", serde_json::to_string_pretty(&output)?);
@@ -491,6 +504,63 @@ async fn run() -> anyhow::Result<()> {
                     println!("\n📁 Supported File Types:");
                     let types_str = supported_types.join(", ");
                     println!("  {types_str}");
+
+                    if format == OutputFormat::Full {
+                        println!("\n🗄️ Database Information:");
+                        println!("  Database type: {}", database_info.database_type);
+                        if let Some(version) = &database_info.database_version {
+                            println!("  Database version: {version}");
+                        }
+                        if let Some(total_size) = database_info.total_size_bytes {
+                            println!("  Total size: {total_size} bytes");
+                        }
+                        println!("  Database files: {}", database_info.database_files.len());
+
+                        println!("\n📦 Dependencies:");
+                        println!("  Retriever: {}", dependency_versions.retriever_version);
+                        println!("  Embed: {}", dependency_versions.embed_version);
+                        println!("  Context: {}", dependency_versions.context_version);
+                        println!("  Rust: {}", dependency_versions.rust_version);
+
+                        println!("\n🔍 Index Consistency:");
+                        println!("  Overall status: {:?}", consistency_report.overall_status);
+                        println!(
+                            "  Checks performed: {}",
+                            consistency_report.checks_performed.len()
+                        );
+                        println!(
+                            "  Total issues: {}",
+                            consistency_report.issues_summary.total_issues
+                        );
+                        if consistency_report.issues_summary.total_issues > 0 {
+                            println!(
+                                "  Critical: {}",
+                                consistency_report.issues_summary.critical_issues
+                            );
+                            println!(
+                                "  Warnings: {}",
+                                consistency_report.issues_summary.warning_issues
+                            );
+                        }
+
+                        println!("\n📂 File System:");
+                        println!(
+                            "  File watching: {}",
+                            if file_system_status.file_watching_active {
+                                "Active"
+                            } else {
+                                "Inactive"
+                            }
+                        );
+                        println!(
+                            "  Directories monitored: {}",
+                            file_system_status.directories_monitored
+                        );
+                        println!(
+                            "  Supported filesystems: {}",
+                            file_system_status.supported_file_systems.len()
+                        );
+                    }
                 }
             }
 

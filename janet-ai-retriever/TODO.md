@@ -6,7 +6,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
 ## janet-ai-retriever API Enhancements Needed
 
 ### Index Statistics & Health
-- [ ] `get_index_statistics()` - Return comprehensive index stats:
+- [x] `get_index_statistics()` - Return comprehensive index stats:
   - Total files indexed
   - Total chunks created
   - Total embeddings generated
@@ -14,7 +14,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Last indexing operation timestamp
   - Index schema version
 
-- [ ] `get_indexing_status()` - Return current indexing operation status:
+- [x] `get_indexing_status()` - Return current indexing operation status:
   - Is indexing currently running?
   - Queue size (pending files to process)
   - Current file being processed
@@ -22,7 +22,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Estimated time remaining
   - Error count during current/last run
 
-- [ ] `get_index_health()` - Return health check information:
+- [x] `get_index_health()` - Return health check information:
   - Database connectivity status
   - File permissions for index directory
   - Disk space available for index growth
@@ -30,14 +30,14 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Database integrity check results
 
 ### Configuration & Model Information
-- [ ] `get_indexing_config()` - Return current indexing configuration:
+- [x] `get_indexing_config()` - Return current indexing configuration:
   - Chunk size and overlap settings
   - File type patterns included/excluded
   - Maximum file size limits
   - Indexing mode (full/incremental/read-only)
   - Worker thread count
 
-- [ ] `get_embedding_model_info()` - Return embedding model details:
+- [x] `get_embedding_model_info()` - Return embedding model details:
   - Model name and version
   - Model dimensions
   - Model download status
@@ -46,7 +46,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Normalization settings
   - ONNX runtime details if available; especially whether we're using a GPU
 
-- [ ] `get_supported_file_types()` - Return list of file types that can be indexed
+- [x] `get_supported_file_types()` - Return list of file types that can be indexed
 
 ### Performance Metrics
 - [ ] `get_search_performance_stats()` - Return search performance metrics:
@@ -64,7 +64,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Memory usage during indexing
 
 ### File System Integration
-- [ ] `get_file_system_status()` - Return file system monitoring status:
+- [x] `get_file_system_status()` - Return file system monitoring status:
   - Is file watching active?
   - Number of directories being monitored
   - Recent file change events
@@ -79,14 +79,14 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - These could be estimates, and might be made from the current queue
 
 ### Database & Storage
-- [ ] `get_database_info()` - Return database-specific information:
+- [x] `get_database_info()` - Return database-specific information:
   - Database type and version
   - Connection pool status
   - Query performance statistics
   - Database file locations and sizes
   - Backup status and last backup time
 
-- [ ] `validate_index_consistency()` - Run consistency checks:
+- [x] `validate_index_consistency()` - Run consistency checks:
   - Verify all chunks have corresponding files
   - Check for orphaned embeddings
   - Validate file hash consistency
@@ -99,7 +99,7 @@ This document outlines enhancements needed in `janet-ai-retriever` and the MCP s
   - Proxy configuration status
   - SSL certificate validation
 
-- [ ] `get_dependency_versions()` - Return version information:
+- [x] `get_dependency_versions()` - Return version information:
   - janet-ai-retriever version
   - janet-ai-embed version
   - janet-ai-context version
