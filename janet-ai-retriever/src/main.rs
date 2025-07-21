@@ -17,7 +17,7 @@ use tokio::time::Duration;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Base directory containing the .code-assistant database
+    /// Base directory containing the .janet.db database
     #[arg(short, long, default_value = ".")]
     base_dir: PathBuf,
 
@@ -142,10 +142,7 @@ async fn run() -> anyhow::Result<()> {
         Commands::Init => {
             let _file_index = FileIndex::open(&args.base_dir).await?;
             println!("Initialized chunk database at {}", args.base_dir.display());
-            println!(
-                "Database location: {}/.code-assistant/index.db",
-                args.base_dir.display()
-            );
+            println!("Database location: {}/.janet.db", args.base_dir.display());
             Ok(())
         }
         Commands::Index {
@@ -158,7 +155,7 @@ async fn run() -> anyhow::Result<()> {
 
             println!("🚀 Starting indexing process...");
             println!("   Repository: {}", repo_path.display());
-            println!("   Database: {}/.code-assistant/", args.base_dir.display());
+            println!("   Database: {}/.janet.db", args.base_dir.display());
             println!("   Max workers: {max_workers}");
             println!("   Chunk size: {chunk_size}");
             println!("   Force reindex: {force}");

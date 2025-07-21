@@ -1,0 +1,9 @@
+# Docker ignore file to reduce build context
+target/
+.git/
+temp_test/
+**/*.log
+**/.DS_Store
+**/node_modules/
+**/.vscode/
+**/.idea/

@@ -293,7 +293,7 @@ cargo run -p janet-ai-mcp -- --root /path/to/codebase
 #### "Database file not found"
 - **Cause**: FileIndex database doesn't exist in expected location
 - **Solution**: Check that `--root` points to indexed directory
-- **Debug**: Look for `.code-assistant/index.db` in root directory
+- **Debug**: Look for `.janet.db` in root directory
 
 ### Performance Optimization
 

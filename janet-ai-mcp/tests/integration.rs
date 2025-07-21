@@ -1,5 +1,8 @@
-use std::path::PathBuf;
 use std::process::Stdio;
+
+#[cfg(test)]
+#[allow(unused_imports)]
+use std::path::PathBuf;
 use tempfile::tempdir;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
@@ -74,7 +77,6 @@ async fn test_server_kill() {
 
 /// Test actual MCP protocol communication over stdio
 #[tokio::test]
-#[ignore]
 async fn test_mcp_initialize() {
     let temp_dir = tempdir().expect("Failed to create temp directory");
 
@@ -174,7 +176,6 @@ async fn test_mcp_initialize() {
 /// Test end-to-end semantic search with real test data
 /// Currently disabled due to SQLite database file access issue in test environment
 #[tokio::test]
-#[ignore]
 async fn test_semantic_search_with_real_data() {
     use janet_ai_retriever::retrieval::{
         indexing_engine::{IndexingEngine, IndexingEngineConfig},
@@ -184,9 +185,12 @@ async fn test_semantic_search_with_real_data() {
     let temp_dir = tempdir().expect("Failed to create temp directory");
     let test_repo_path = temp_dir.path().join("test_repo");
 
-    // Copy test data from janet-ai-retriever examples
-    let source_data_path =
-        PathBuf::from("/home/sean-gallagher/sandbox/janet/janet-ai-retriever/examples/test_data");
+    // Copy test data from janet-ai-retriever examples (relative to workspace root)
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let source_data_path = workspace_root.join("janet-ai-retriever/examples/test_data");
     copy_dir_all(&source_data_path, &test_repo_path).expect("Failed to copy test data");
 
     println!("Test repo created at: {test_repo_path:?}");
@@ -199,7 +203,10 @@ async fn test_semantic_search_with_real_data() {
 
     println!("⚙️  Initializing IndexingEngine...");
 
-    // Create indexing engine (using persistent database that MCP server can access)
+    // Ensure the temporary directory exists
+    std::fs::create_dir_all(&test_repo_path).expect("Failed to create test repo directory");
+
+    // Create indexing engine (using persistent database so MCP server can access it)
     let mut engine = IndexingEngine::new(indexing_config)
         .await
         .expect("Failed to create IndexingEngine");

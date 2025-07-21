@@ -413,11 +413,7 @@ async fn test_cli_error_message_quality() -> Result<()> {
 async fn test_cli_database_state_edge_cases() -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
-    // Create .code-assistant directory but no database file
-    let assist_dir = temp_dir.path().join(".code-assistant");
-    std::fs::create_dir_all(&assist_dir)?;
-
-    // Commands should fail gracefully when database doesn't exist (no .code-assistant dir)
+    // Commands should fail gracefully when database doesn't exist
     let empty_temp_dir = tempfile::tempdir()?;
     let output = run_cli(&empty_temp_dir, &["stats"])?;
     assert!(!output.status.success());
@@ -425,7 +421,7 @@ async fn test_cli_database_state_edge_cases() -> Result<()> {
     assert!(stderr.contains("Error:"));
 
     // Create an empty file where database should be
-    let db_path = assist_dir.join("index.db");
+    let db_path = temp_dir.path().join(".janet.db");
     std::fs::write(&db_path, "")?;
 
     // Our CLI should handle corrupted/empty database gracefully by reinitializing it

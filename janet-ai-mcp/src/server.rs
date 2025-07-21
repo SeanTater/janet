@@ -60,11 +60,7 @@ impl JanetMcpServer {
 
     /// Get index infrastructure status
     fn get_index_status(&self) -> String {
-        let index_db_path = self
-            .config
-            .root_dir
-            .join(".code-assistant")
-            .join("index.db");
+        let index_db_path = self.config.root_dir.join(".janet.db");
         let index_exists = index_db_path.exists();
 
         let mut status = String::from(
@@ -98,7 +94,7 @@ impl JanetMcpServer {
         }
 
         // Check index directory permissions
-        let index_dir = self.config.root_dir.join(".code-assistant");
+        let index_dir = &self.config.root_dir;
         let dir_status = if index_dir.exists() {
             if index_dir
                 .metadata()
@@ -124,11 +120,7 @@ impl JanetMcpServer {
 
     /// Get search capabilities status
     fn get_search_status(&self) -> String {
-        let index_db_path = self
-            .config
-            .root_dir
-            .join(".code-assistant")
-            .join("index.db");
+        let index_db_path = self.config.root_dir.join(".janet.db");
         let index_available = index_db_path.exists();
 
         format!(
@@ -195,11 +187,7 @@ impl JanetMcpServer {
 
     /// Get troubleshooting information
     fn get_troubleshooting_info(&self) -> String {
-        let index_db_path = self
-            .config
-            .root_dir
-            .join(".code-assistant")
-            .join("index.db");
+        let index_db_path = self.config.root_dir.join(".janet.db");
         let index_exists = index_db_path.exists();
 
         let mut info = String::from(

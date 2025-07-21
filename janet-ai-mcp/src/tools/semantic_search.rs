@@ -99,8 +99,8 @@ async fn perform_semantic_search(
 ) -> AnyhowResult<Vec<(janet_ai_retriever::storage::Chunk, f32)>> {
     use half::f16;
 
-    // Try to load existing index from the root directory (IndexingEngine creates it at .code-assistant)
-    let index_db_path = config.root_dir.join(".code-assistant").join("index.db");
+    // Try to load existing index from the root directory
+    let index_db_path = config.root_dir.join(".janet.db");
 
     if !index_db_path.exists() {
         return Err(anyhow::anyhow!(
