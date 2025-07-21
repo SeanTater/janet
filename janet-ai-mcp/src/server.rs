@@ -253,10 +253,16 @@ impl JanetMcpServer {
     /// Serve the MCP server using stdio transport
     pub async fn serve_stdio(&self) -> Result<()> {
         info!("Starting MCP server with stdio transport");
+        eprintln!("DEBUG: serve_stdio called");
 
         let transport = (stdin(), stdout());
+        eprintln!("DEBUG: Created stdio transport");
+
         let server = self.clone().serve(transport).await?;
+        eprintln!("DEBUG: Server.serve() completed, waiting for connections");
+
         let quit_reason = server.waiting().await?;
+        eprintln!("DEBUG: Server quit with reason: {quit_reason:?}");
 
         info!("MCP server quit: {:?}", quit_reason);
         Ok(())

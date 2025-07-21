@@ -95,14 +95,19 @@ async fn test_mcp_initialize() {
                     let mut stderr_output = String::new();
                     // Try to read stderr with a short timeout
                     if let Ok(Ok(_)) = timeout(
-                        Duration::from_secs(1),
+                        Duration::from_secs(2),
                         stderr_reader.read_to_string(&mut stderr_output),
                     )
                     .await
                     {
                         if !stderr_output.is_empty() {
-                            println!("Server stderr: {stderr_output}");
+                            println!("Server stderr output:");
+                            println!("{stderr_output}");
+                        } else {
+                            println!("Server stderr is empty");
                         }
+                    } else {
+                        println!("Failed to read stderr within timeout");
                     }
                 }
 
