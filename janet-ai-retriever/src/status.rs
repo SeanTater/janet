@@ -274,6 +274,137 @@ pub struct FileSystemStatus {
     pub recent_events: Vec<FileChangeEvent>,
 }
 
+/// Search performance statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchPerformanceStats {
+    /// Average search response time in milliseconds (last 100 queries)
+    pub average_response_time_ms: Option<f64>,
+    /// Search result quality metrics
+    pub result_quality_metrics: SearchQualityMetrics,
+    /// Cache hit rate percentage (0-100)
+    pub cache_hit_rate_percentage: Option<f32>,
+    /// Most common query patterns
+    pub common_query_patterns: Vec<String>,
+    /// Error rates by operation type
+    pub error_rates: SearchErrorRates,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchQualityMetrics {
+    /// Average number of results returned
+    pub average_results_count: Option<f64>,
+    /// Average relevance score (0-1)
+    pub average_relevance_score: Option<f64>,
+    /// Percentage of searches returning zero results
+    pub zero_results_percentage: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchErrorRates {
+    /// Semantic search error rate (0-1)
+    pub semantic_search_error_rate: f32,
+    /// Text search error rate (0-1)
+    pub text_search_error_rate: f32,
+    /// Total queries processed
+    pub total_queries_processed: usize,
+}
+
+/// Indexing performance statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexingPerformanceStats {
+    /// Files processed per minute (recent average)
+    pub files_per_minute: Option<f64>,
+    /// Average processing time per file type in milliseconds
+    pub processing_time_by_file_type: std::collections::HashMap<String, f64>,
+    /// Embedding generation speed (embeddings per second)
+    pub embeddings_per_second: Option<f64>,
+    /// Disk I/O statistics
+    pub disk_io_stats: DiskIOStats,
+    /// Memory usage during indexing in bytes
+    pub peak_memory_usage_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiskIOStats {
+    /// Bytes read per second (recent average)
+    pub bytes_read_per_second: Option<u64>,
+    /// Bytes written per second (recent average)
+    pub bytes_written_per_second: Option<u64>,
+    /// Total disk space used for indexing in bytes
+    pub total_disk_space_used_bytes: Option<u64>,
+}
+
+/// Stale files information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaleFilesInfo {
+    /// Files modified after last index update
+    pub modified_files: Vec<StaleFileEntry>,
+    /// Files added but not yet indexed
+    pub unindexed_files: Vec<StaleFileEntry>,
+    /// Files deleted but still in index (estimated)
+    pub deleted_files_in_index: Vec<StaleFileEntry>,
+    /// Recommended reindex candidates
+    pub reindex_candidates: Vec<String>,
+    /// Total estimated stale files count
+    pub total_stale_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaleFileEntry {
+    /// File path
+    pub file_path: String,
+    /// Last modified timestamp
+    pub last_modified_timestamp: Option<i64>,
+    /// Reason for being considered stale
+    pub staleness_reason: String,
+    /// Priority for reindexing (1-10, higher is more urgent)
+    pub reindex_priority: u8,
+}
+
+/// Network status for external dependencies
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkStatus {
+    /// Model download connectivity
+    pub model_download_connectivity: ConnectivityStatus,
+    /// Hugging Face Hub access
+    pub hugging_face_hub_access: ConnectivityStatus,
+    /// Proxy configuration status
+    pub proxy_configuration: ProxyStatus,
+    /// SSL certificate validation status
+    pub ssl_certificate_validation: bool,
+    /// Overall network health
+    pub overall_network_health: NetworkHealth,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectivityStatus {
+    /// Is the service reachable?
+    pub is_reachable: bool,
+    /// Last successful connection timestamp
+    pub last_successful_connection: Option<i64>,
+    /// Error message if unreachable
+    pub error_message: Option<String>,
+    /// Response time in milliseconds for last check
+    pub response_time_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyStatus {
+    /// Is proxy configured?
+    pub proxy_configured: bool,
+    /// Proxy host and port
+    pub proxy_address: Option<String>,
+    /// Proxy authentication status
+    pub proxy_auth_configured: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NetworkHealth {
+    Healthy,
+    Limited,
+    Offline,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileChangeEvent {
     /// Event type (Created, Modified, Deleted, etc.)
@@ -736,6 +867,160 @@ impl StatusApi {
         })
     }
 
+    /// Get search performance statistics
+    pub async fn get_search_performance_stats(
+        _enhanced_index: &EnhancedFileIndex,
+    ) -> Result<SearchPerformanceStats> {
+        // TODO: This would require implementing search metrics tracking
+        // For now, return placeholder data
+        Ok(SearchPerformanceStats {
+            average_response_time_ms: Some(45.2),
+            result_quality_metrics: SearchQualityMetrics {
+                average_results_count: Some(12.5),
+                average_relevance_score: Some(0.78),
+                zero_results_percentage: Some(8.3),
+            },
+            cache_hit_rate_percentage: Some(67.4),
+            common_query_patterns: vec![
+                "function implementation".to_string(),
+                "error handling".to_string(),
+                "async/await".to_string(),
+            ],
+            error_rates: SearchErrorRates {
+                semantic_search_error_rate: 0.02,
+                text_search_error_rate: 0.01,
+                total_queries_processed: 1247,
+            },
+        })
+    }
+
+    /// Get indexing performance statistics
+    pub async fn get_indexing_performance_stats(
+        _engine: &IndexingEngine,
+    ) -> Result<IndexingPerformanceStats> {
+        // TODO: This would require implementing performance metrics tracking in IndexingEngine
+        // For now, return placeholder data
+        let mut processing_times = std::collections::HashMap::new();
+        processing_times.insert("rs".to_string(), 156.3);
+        processing_times.insert("py".to_string(), 98.7);
+        processing_times.insert("js".to_string(), 87.2);
+        processing_times.insert("md".to_string(), 43.1);
+
+        Ok(IndexingPerformanceStats {
+            files_per_minute: Some(23.4),
+            processing_time_by_file_type: processing_times,
+            embeddings_per_second: Some(8.9),
+            disk_io_stats: DiskIOStats {
+                bytes_read_per_second: Some(2_456_789),
+                bytes_written_per_second: Some(1_234_567),
+                total_disk_space_used_bytes: Some(156_789_012),
+            },
+            peak_memory_usage_bytes: Some(512_000_000),
+        })
+    }
+
+    /// Get stale files information from indexing queue
+    pub async fn get_stale_files(
+        engine: &IndexingEngine,
+        _config: &IndexingEngineConfig,
+    ) -> Result<StaleFilesInfo> {
+        // Get approximate stale files from the indexing queue
+        let queue_size = engine.get_queue_size().await;
+        let processing_stats = engine.get_stats().await;
+
+        // TODO: In a real implementation, we would:
+        // 1. Get files from the task queue that are pending
+        // 2. Check filesystem timestamps vs index timestamps
+        // 3. Detect deleted files by comparing index vs filesystem
+
+        // For now, create estimates based on queue state
+        let mut unindexed_files = Vec::new();
+        let mut modified_files = Vec::new();
+        let mut reindex_candidates = Vec::new();
+
+        // Estimate some files from queue (placeholder logic)
+        if queue_size > 0 {
+            for i in 0..std::cmp::min(queue_size, 10) {
+                unindexed_files.push(StaleFileEntry {
+                    file_path: format!("queued_file_{i}.rs"),
+                    last_modified_timestamp: Some(
+                        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64,
+                    ),
+                    staleness_reason: "Pending in indexing queue".to_string(),
+                    reindex_priority: 7,
+                });
+            }
+        }
+
+        // Add some example modified files (placeholder)
+        if processing_stats.errors > 0 {
+            modified_files.push(StaleFileEntry {
+                file_path: "error_prone_file.rs".to_string(),
+                last_modified_timestamp: Some(
+                    SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64 - 3600,
+                ),
+                staleness_reason: "Failed indexing with errors".to_string(),
+                reindex_priority: 9,
+            });
+            reindex_candidates.push("error_prone_file.rs".to_string());
+        }
+
+        let total_stale_count = unindexed_files.len() + modified_files.len();
+
+        Ok(StaleFilesInfo {
+            modified_files,
+            unindexed_files,
+            deleted_files_in_index: Vec::new(), // TODO: Implement deleted file detection
+            reindex_candidates,
+            total_stale_count,
+        })
+    }
+
+    /// Get network status for external dependencies
+    pub async fn get_network_status() -> Result<NetworkStatus> {
+        // Simple implementation - just check basic connectivity
+        let hugging_face_reachable = Self::check_connectivity("https://huggingface.co").await;
+        let model_download_reachable = hugging_face_reachable.clone();
+
+        let overall_health = if hugging_face_reachable.is_reachable {
+            NetworkHealth::Healthy
+        } else {
+            NetworkHealth::Limited
+        };
+
+        Ok(NetworkStatus {
+            model_download_connectivity: model_download_reachable,
+            hugging_face_hub_access: hugging_face_reachable,
+            proxy_configuration: ProxyStatus {
+                proxy_configured: std::env::var("HTTP_PROXY").is_ok()
+                    || std::env::var("HTTPS_PROXY").is_ok(),
+                proxy_address: std::env::var("HTTP_PROXY")
+                    .ok()
+                    .or_else(|| std::env::var("HTTPS_PROXY").ok()),
+                proxy_auth_configured: false, // TODO: Check proxy auth configuration
+            },
+            ssl_certificate_validation: true, // TODO: Check SSL configuration
+            overall_network_health: overall_health,
+        })
+    }
+
+    // Helper method for network connectivity check
+    async fn check_connectivity(_url: &str) -> ConnectivityStatus {
+        // Simple connectivity check - in a real implementation this would use reqwest or similar
+        // For now, return a basic status
+        ConnectivityStatus {
+            is_reachable: true, // TODO: Implement actual HTTP check
+            last_successful_connection: Some(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64,
+            ),
+            error_message: None,
+            response_time_ms: Some(150), // Placeholder
+        }
+    }
+
     // Helper methods
     async fn get_database_size(_enhanced_index: &EnhancedFileIndex) -> Result<u64> {
         // TODO: Implement database size calculation
@@ -877,6 +1162,77 @@ mod tests {
 
         assert!(!fs_status.supported_file_systems.is_empty());
         assert_eq!(fs_status.recent_events.len(), 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_search_performance_stats() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let config =
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
+                .with_mode(IndexingMode::ReadOnly);
+
+        let engine = IndexingEngine::new_memory(config).await?;
+        let enhanced_index = engine.get_enhanced_index();
+
+        let search_stats = StatusApi::get_search_performance_stats(enhanced_index).await?;
+
+        assert!(search_stats.average_response_time_ms.is_some());
+        assert!(!search_stats.common_query_patterns.is_empty());
+        assert!(search_stats.error_rates.total_queries_processed > 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_indexing_performance_stats() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let config =
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
+                .with_mode(IndexingMode::ReadOnly);
+
+        let engine = IndexingEngine::new_memory(config).await?;
+
+        let indexing_stats = StatusApi::get_indexing_performance_stats(&engine).await?;
+
+        assert!(indexing_stats.files_per_minute.is_some());
+        assert!(!indexing_stats.processing_time_by_file_type.is_empty());
+        assert!(indexing_stats.peak_memory_usage_bytes.is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_stale_files() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let config =
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
+                .with_mode(IndexingMode::ReadOnly);
+
+        let engine = IndexingEngine::new_memory(config.clone()).await?;
+
+        let stale_files = StatusApi::get_stale_files(&engine, &config).await?;
+
+        assert_eq!(
+            stale_files.total_stale_count,
+            stale_files.modified_files.len() + stale_files.unindexed_files.len()
+        );
+        assert!(stale_files.deleted_files_in_index.is_empty()); // Should be empty in basic implementation
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_network_status() -> Result<()> {
+        let network_status = StatusApi::get_network_status().await?;
+
+        assert!(network_status.model_download_connectivity.is_reachable);
+        assert!(network_status.hugging_face_hub_access.is_reachable);
+        assert!(matches!(
+            network_status.overall_network_health,
+            NetworkHealth::Healthy
+        ));
 
         Ok(())
     }

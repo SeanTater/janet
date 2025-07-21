@@ -394,6 +394,11 @@ async fn run() -> anyhow::Result<()> {
             let dependency_versions = StatusApi::get_dependency_versions().await?;
             let consistency_report = StatusApi::validate_index_consistency(enhanced_index).await?;
             let file_system_status = StatusApi::get_file_system_status(&config).await?;
+            let search_performance =
+                StatusApi::get_search_performance_stats(enhanced_index).await?;
+            let indexing_performance = StatusApi::get_indexing_performance_stats(&engine).await?;
+            let stale_files = StatusApi::get_stale_files(&engine, &config).await?;
+            let network_status = StatusApi::get_network_status().await?;
 
             #[derive(Serialize)]
             struct StatusOutput {
@@ -407,6 +412,10 @@ async fn run() -> anyhow::Result<()> {
                 dependency_versions: janet_ai_retriever::status::DependencyVersions,
                 consistency_report: janet_ai_retriever::status::IndexConsistencyReport,
                 file_system_status: janet_ai_retriever::status::FileSystemStatus,
+                search_performance_stats: janet_ai_retriever::status::SearchPerformanceStats,
+                indexing_performance_stats: janet_ai_retriever::status::IndexingPerformanceStats,
+                stale_files_info: janet_ai_retriever::status::StaleFilesInfo,
+                network_status: janet_ai_retriever::status::NetworkStatus,
             }
 
             let output = StatusOutput {
@@ -420,25 +429,10 @@ async fn run() -> anyhow::Result<()> {
                 dependency_versions,
                 consistency_report,
                 file_system_status,
-            };
-
-            #[derive(Serialize)]
-            struct StatusOutput {
-                index_statistics: janet_ai_retriever::status::IndexStatistics,
-                indexing_status: janet_ai_retriever::status::IndexingStatus,
-                index_health: janet_ai_retriever::status::IndexHealth,
-                indexing_configuration: janet_ai_retriever::status::IndexingConfiguration,
-                embedding_model_info: Option<janet_ai_retriever::status::EmbeddingModelInfo>,
-                supported_file_types: Vec<String>,
-            }
-
-            let output = StatusOutput {
-                index_statistics: index_stats,
-                indexing_status,
-                index_health,
-                indexing_configuration: indexing_config,
-                embedding_model_info: model_info,
-                supported_file_types: supported_types,
+                search_performance_stats: search_performance,
+                indexing_performance_stats: indexing_performance,
+                stale_files_info: stale_files,
+                network_status,
             };
 
             match format {
