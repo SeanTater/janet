@@ -11,6 +11,7 @@ use serde::Deserialize;
 use tempfile;
 use tracing::info;
 
+#[allow(dead_code)] // Used by rmcp macro system
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SemanticSearchRequest {
     #[schemars(description = "Query text for semantic search")]
@@ -21,6 +22,7 @@ pub struct SemanticSearchRequest {
     pub threshold: Option<f32>,
 }
 
+#[allow(dead_code)] // Used by rmcp macro system
 pub async fn semantic_search(
     config: &ServerConfig,
     request: SemanticSearchRequest,
@@ -88,6 +90,7 @@ pub async fn semantic_search(
 }
 
 /// Attempt to perform semantic search using the indexing engine
+#[allow(dead_code)] // Used by semantic_search function
 async fn perform_semantic_search(
     config: &ServerConfig,
     query: &str,
@@ -154,6 +157,7 @@ async fn perform_semantic_search(
 }
 
 /// Create an embedding provider for generating query embeddings
+#[allow(dead_code)] // Used by perform_semantic_search function
 async fn create_embedding_provider() -> AnyhowResult<FastEmbedProvider> {
     // Use a lightweight model suitable for MCP server usage
     let temp_dir =

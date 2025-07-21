@@ -24,7 +24,7 @@ impl ServerConfig {
     fn new(root_dir: PathBuf) -> Self {
         Self { root_dir }
     }
-    
+
     fn default() -> Self {
         Self {
             root_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),

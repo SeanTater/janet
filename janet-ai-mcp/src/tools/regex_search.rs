@@ -8,6 +8,7 @@ use std::path::Path;
 use tokio::fs;
 use tracing::{info, warn};
 
+#[allow(dead_code)] // Used by rmcp macro system
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct RegexSearchRequest {
     #[schemars(description = "Regular expression pattern to search for")]
@@ -22,6 +23,7 @@ pub struct RegexSearchRequest {
     pub include_docs: Option<bool>,
 }
 
+#[allow(dead_code)] // Used by rmcp macro system
 pub async fn regex_search(
     config: &ServerConfig,
     request: RegexSearchRequest,
@@ -176,6 +178,7 @@ pub async fn regex_search(
 }
 
 /// Check if a path matches any of the provided compiled glob patterns
+#[allow(dead_code)] // Used by regex_search function
 fn matches_any_glob(path: &Path, compiled_globs: &[glob::Pattern]) -> bool {
     let path_str = path.to_string_lossy();
 

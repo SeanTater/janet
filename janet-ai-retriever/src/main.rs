@@ -155,84 +155,97 @@ async fn run() -> anyhow::Result<()> {
             force,
         } => {
             let repo_path = repo.unwrap_or_else(|| args.base_dir.clone());
-            
+
             println!("🚀 Starting indexing process...");
             println!("   Repository: {}", repo_path.display());
             println!("   Database: {}/.code-assistant/", args.base_dir.display());
-            println!("   Max workers: {}", max_workers);
-            println!("   Chunk size: {}", chunk_size);
-            println!("   Force reindex: {}", force);
-            
+            println!("   Max workers: {max_workers}");
+            println!("   Chunk size: {chunk_size}");
+            println!("   Force reindex: {force}");
+
             // Set up the indexing engine configuration
-            let indexing_config = IndexingEngineConfig::new("cli-indexing".to_string(), repo_path.clone())
-                .with_mode(if force { IndexingMode::FullReindex } else { IndexingMode::ContinuousMonitoring })
-                .with_max_workers(max_workers)
-                .with_chunk_size(chunk_size);
+            let indexing_config =
+                IndexingEngineConfig::new("cli-indexing".to_string(), repo_path.clone())
+                    .with_mode(if force {
+                        IndexingMode::FullReindex
+                    } else {
+                        IndexingMode::ContinuousMonitoring
+                    })
+                    .with_max_workers(max_workers)
+                    .with_chunk_size(chunk_size);
 
             println!("⚙️  Initializing IndexingEngine...");
-            
+
             // Create indexing engine using the specified base directory
             let mut engine = IndexingEngine::new(indexing_config).await?;
-            
+
             println!("✅ IndexingEngine initialized successfully");
-            
+
             // Start the engine and perform indexing
             println!("🔄 Starting indexing...");
             engine.start().await?;
-            
+
             // Wait for indexing to complete
             let mut attempts = 0;
             let max_attempts = 60; // 60 seconds max wait
-            
+
             loop {
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                
+
                 // Process any pending tasks
                 engine.process_pending_tasks().await?;
-                
+
                 let queue_size = engine.get_queue_size().await;
                 let stats = engine.get_stats().await;
-                
+
                 if attempts % 5 == 0 || queue_size == 0 {
                     println!(
                         "📊 Queue size: {}, Files processed: {}, Chunks created: {}, Embeddings: {}",
-                        queue_size, stats.files_processed, stats.chunks_created, stats.embeddings_generated
+                        queue_size,
+                        stats.files_processed,
+                        stats.chunks_created,
+                        stats.embeddings_generated
                     );
                 }
-                
+
                 if queue_size == 0 && stats.files_processed > 0 {
                     println!("✅ Indexing completed!");
                     break;
                 }
-                
+
                 attempts += 1;
                 if attempts >= max_attempts {
-                    println!("⚠️  Timeout waiting for indexing to complete (queue_size: {})", queue_size);
+                    println!(
+                        "⚠️  Timeout waiting for indexing to complete (queue_size: {queue_size})"
+                    );
                     println!("   You may want to wait longer or check for errors");
                     break;
                 }
             }
-            
+
             // Get final statistics
             let final_stats = engine.get_stats().await;
             let index_stats = engine.get_index_stats().await?;
-            
+
             println!("\n📈 Final Statistics:");
             println!("   Files processed: {}", final_stats.files_processed);
             println!("   Chunks created: {}", final_stats.chunks_created);
-            println!("   Embeddings generated: {}", final_stats.embeddings_generated);
+            println!(
+                "   Embeddings generated: {}",
+                final_stats.embeddings_generated
+            );
             println!("   Errors encountered: {}", final_stats.errors);
             println!("   Total files in index: {}", index_stats.files_count);
             println!("   Total chunks in index: {}", index_stats.chunks_count);
             println!("   Embedding models: {}", index_stats.models_count);
-            
+
             // Clean up
             engine.shutdown().await?;
-            
+
             println!("\n🎉 Indexing completed successfully!");
             println!("   You can now use 'janet-ai-retriever search' to find similar chunks");
             println!("   Or use the janet-ai-mcp server for semantic search over MCP");
-            
+
             Ok(())
         }
         Commands::List {
