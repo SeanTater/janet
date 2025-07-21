@@ -389,6 +389,38 @@ async fn run() -> anyhow::Result<()> {
             let indexing_config = StatusApi::get_indexing_config(&config).await?;
             let model_info = StatusApi::get_embedding_model_info(None).await?;
             let supported_types = StatusApi::get_supported_file_types(&config).await?;
+            let database_info =
+                StatusApi::get_database_info(enhanced_index, &args.base_dir).await?;
+            let dependency_versions = StatusApi::get_dependency_versions().await?;
+            let consistency_report = StatusApi::validate_index_consistency(enhanced_index).await?;
+            let file_system_status = StatusApi::get_file_system_status(&config).await?;
+
+            #[derive(Serialize)]
+            struct StatusOutput {
+                index_statistics: janet_ai_retriever::status::IndexStatistics,
+                indexing_status: janet_ai_retriever::status::IndexingStatus,
+                index_health: janet_ai_retriever::status::IndexHealth,
+                indexing_configuration: janet_ai_retriever::status::IndexingConfiguration,
+                embedding_model_info: Option<janet_ai_retriever::status::EmbeddingModelInfo>,
+                supported_file_types: Vec<String>,
+                database_info: janet_ai_retriever::status::DatabaseInfo,
+                dependency_versions: janet_ai_retriever::status::DependencyVersions,
+                consistency_report: janet_ai_retriever::status::IndexConsistencyReport,
+                file_system_status: janet_ai_retriever::status::FileSystemStatus,
+            }
+
+            let output = StatusOutput {
+                index_statistics: index_stats,
+                indexing_status,
+                index_health,
+                indexing_configuration: indexing_config,
+                embedding_model_info: model_info,
+                supported_file_types: supported_types,
+                database_info,
+                dependency_versions,
+                consistency_report,
+                file_system_status,
+            };
 
             #[derive(Serialize)]
             struct StatusOutput {

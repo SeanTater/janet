@@ -131,7 +131,7 @@ The project references ChunkHound architecture (see ARCHITECTURE_REFERENCE.md), 
 - Write benchmarks and keep track of them, but don't obsess
 
 ## Git Workflow
-- Never commit directly to main. Use conventional commits. Work in feature branches, and create PRs.
+- Never commit directly to main. Work in feature branches, and create PRs.
 - Commit and push (to a feature branch and PR) whenever you feel the code is generally functional and tests are green.
 
 ## PR and Testing Guidelines
