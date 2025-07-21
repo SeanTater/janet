@@ -390,107 +390,31 @@ async fn run() -> anyhow::Result<()> {
             let model_info = StatusApi::get_embedding_model_info(None).await?;
             let supported_types = StatusApi::get_supported_file_types(&config).await?;
 
+            #[derive(Serialize)]
+            struct StatusOutput {
+                index_statistics: janet_ai_retriever::status::IndexStatistics,
+                indexing_status: janet_ai_retriever::status::IndexingStatus,
+                index_health: janet_ai_retriever::status::IndexHealth,
+                indexing_configuration: janet_ai_retriever::status::IndexingConfiguration,
+                embedding_model_info: Option<janet_ai_retriever::status::EmbeddingModelInfo>,
+                supported_file_types: Vec<String>,
+            }
+
+            let output = StatusOutput {
+                index_statistics: index_stats,
+                indexing_status,
+                index_health,
+                indexing_configuration: indexing_config,
+                embedding_model_info: model_info,
+                supported_file_types: supported_types,
+            };
+
             match format {
                 OutputFormat::Json => {
-                    #[derive(Serialize)]
-                    struct StatusOutput {
-                        index_statistics: janet_ai_retriever::status::IndexStatistics,
-                        indexing_status: janet_ai_retriever::status::IndexingStatus,
-                        index_health: janet_ai_retriever::status::IndexHealth,
-                        indexing_configuration: janet_ai_retriever::status::IndexingConfiguration,
-                        embedding_model_info:
-                            Option<janet_ai_retriever::status::EmbeddingModelInfo>,
-                        supported_file_types: Vec<String>,
-                    }
-
-                    let output = StatusOutput {
-                        index_statistics: index_stats,
-                        indexing_status,
-                        index_health,
-                        indexing_configuration: indexing_config,
-                        embedding_model_info: model_info,
-                        supported_file_types: supported_types,
-                    };
-
                     println!("{}", serde_json::to_string_pretty(&output)?);
                 }
                 OutputFormat::Summary | OutputFormat::Full => {
-                    println!("Janet AI Retriever Status");
-                    println!("==========================");
-
-                    println!("\n📊 Index Statistics:");
-                    println!("  Total files: {}", index_stats.total_files);
-                    println!("  Total chunks: {}", index_stats.total_chunks);
-                    println!("  Total embeddings: {}", index_stats.total_embeddings);
-                    println!("  Models count: {}", index_stats.models_count);
-                    if let Some(db_size) = index_stats.database_size_bytes {
-                        println!("  Database size: {db_size} bytes");
-                    }
-
-                    println!("\n⚙️  Indexing Status:");
-                    println!(
-                        "  Is running: {}",
-                        if indexing_status.is_running {
-                            "Yes"
-                        } else {
-                            "No"
-                        }
-                    );
-                    println!("  Queue size: {}", indexing_status.queue_size);
-                    println!("  Files processed: {}", indexing_status.files_processed);
-                    println!("  Chunks created: {}", indexing_status.chunks_created);
-                    println!(
-                        "  Embeddings generated: {}",
-                        indexing_status.embeddings_generated
-                    );
-                    println!("  Errors: {}", indexing_status.error_count);
-
-                    println!("\n💚 Health Status:");
-                    println!("  Overall status: {:?}", index_health.overall_status);
-                    println!(
-                        "  Database connected: {}",
-                        if index_health.database_connected {
-                            "Yes"
-                        } else {
-                            "No"
-                        }
-                    );
-                    println!(
-                        "  Database integrity: {}",
-                        if index_health.database_integrity_ok {
-                            "OK"
-                        } else {
-                            "Issues found"
-                        }
-                    );
-                    if let Some(ref error) = index_health.database_error {
-                        println!("  Database error: {error}");
-                    }
-
-                    println!("\n🔧 Configuration:");
-                    println!("  Repository: {}", indexing_config.repository);
-                    println!("  Base path: {}", indexing_config.base_path);
-                    println!("  Indexing mode: {}", indexing_config.indexing_mode);
-                    println!("  Max chunk size: {}", indexing_config.max_chunk_size);
-                    println!("  Worker threads: {}", indexing_config.worker_thread_count);
-
-                    if let Some(ref model) = model_info {
-                        println!("\n🤖 Embedding Model:");
-                        println!("  Model name: {}", model.model_name);
-                        println!("  Provider: {}", model.provider);
-                        println!("  Dimensions: {}", model.dimensions);
-                        println!(
-                            "  Normalized: {}",
-                            if model.normalized { "Yes" } else { "No" }
-                        );
-                        println!("  Download status: {:?}", model.download_status);
-                    } else {
-                        println!("\n🤖 Embedding Model: None configured");
-                    }
-
-                    println!("\n📁 Supported File Types:");
-                    let types_str = supported_types.join(", ");
-                    println!("  {types_str}");
+                    println!("{}", toml::to_string_pretty(&output)?);
                 }
             }
 
