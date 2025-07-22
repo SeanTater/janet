@@ -35,7 +35,7 @@ pub struct FileIndex {
 
 impl FileIndex {
     pub async fn open(base: &Path) -> Result<Self> {
-        let db_path = base.join(".janet.db");
+        let db_path = base.join(".janet-ai.db");
         let database_url = format!("sqlite:{}", db_path.display());
 
         let pool = SqlitePool::connect(&database_url).await?;

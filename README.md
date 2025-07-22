@@ -167,7 +167,7 @@ cargo run -p janet-ai-embed --example modernbert_example
 
 #### Available Commands
 
-- **`init`**: Initialize the chunk database in `.janet.db`
+- **`init`**: Initialize the chunk database in `.janet-ai.db`
 - **`list`**: List chunks with optional filtering by file hash
 - **`get <id>`**: Retrieve a specific chunk by its database ID
 - **`search`**: Find similar chunks using cosine similarity on embeddings

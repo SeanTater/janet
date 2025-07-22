@@ -70,7 +70,7 @@ MCP (Model Context Protocol) server for AI integration
 ## Key Technical Details
 
 ### Database Storage
-- Uses `.janet.db` SQLite file directly in base directory (not `.code-assistant/index.db`)
+- Uses `.janet-ai.db` SQLite file directly in base directory (not `.code-assistant/index.db`)
 - Avoids permission issues in CI environments by eliminating subdirectory creation
 - Supports both persistent and in-memory databases for testing
 
@@ -78,6 +78,10 @@ MCP (Model Context Protocol) server for AI integration
 - **Local-first**: Prefer SQLite over Pinecone, Ollama over OpenAI APIs
 - **Testing**: Use tracing (not log), focus on happy paths first, use "sans io" patterns
 - **Performance**: f16 embeddings for memory efficiency, async-first architecture
+
+## Git Workflow
+- Never commit directly to main. Work in feature branches, and create PRs.
+- Commit and push (to a feature branch and PR) whenever you feel the code is generally functional and tests are green.
 
 ## Workflows
 

@@ -17,7 +17,7 @@ use tokio::time::Duration;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Base directory containing the .janet.db database
+    /// Base directory containing the .janet-ai.db database file
     #[arg(short, long, default_value = ".")]
     base_dir: PathBuf,
 
@@ -81,6 +81,12 @@ enum Commands {
     },
     /// Show database statistics
     Stats,
+    /// Show comprehensive status information
+    Status {
+        /// Output format
+        #[arg(short, long, default_value = "summary")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -142,7 +148,10 @@ async fn run() -> anyhow::Result<()> {
         Commands::Init => {
             let _file_index = FileIndex::open(&args.base_dir).await?;
             println!("Initialized chunk database at {}", args.base_dir.display());
-            println!("Database location: {}/.janet.db", args.base_dir.display());
+            println!(
+                "Database location: {}/.janet-ai.db",
+                args.base_dir.display()
+            );
             Ok(())
         }
         Commands::Index {
@@ -155,7 +164,7 @@ async fn run() -> anyhow::Result<()> {
 
             println!("🚀 Starting indexing process...");
             println!("   Repository: {}", repo_path.display());
-            println!("   Database: {}/.janet.db", args.base_dir.display());
+            println!("   Database: {}/.janet-ai.db", args.base_dir.display());
             println!("   Max workers: {max_workers}");
             println!("   Chunk size: {chunk_size}");
             println!("   Force reindex: {force}");
@@ -472,6 +481,73 @@ async fn run() -> anyhow::Result<()> {
                 }
                 if stats.unique_files.len() > 10 {
                     println!("    ... and {} more", stats.unique_files.len() - 10);
+                }
+            }
+
+            Ok(())
+        }
+        Commands::Status { format } => {
+            use janet_ai_retriever::{
+                retrieval::{
+                    indexing_engine::{IndexingEngine, IndexingEngineConfig},
+                    indexing_mode::IndexingMode,
+                },
+                status::StatusApi,
+            };
+
+            // Create a read-only indexing engine for status queries
+            let config = IndexingEngineConfig::new("cli-repo".to_string(), args.base_dir.clone())
+                .with_mode(IndexingMode::ReadOnly);
+
+            let engine = IndexingEngine::new(config.clone()).await?;
+            let enhanced_index = engine.get_enhanced_index();
+
+            // Get all status information
+            let index_stats = StatusApi::get_index_statistics(enhanced_index).await?;
+            let indexing_status = StatusApi::get_indexing_status(&engine).await?;
+            let index_health = StatusApi::get_index_health(enhanced_index).await?;
+            let indexing_config = StatusApi::get_indexing_config(&config).await?;
+            let model_info = StatusApi::get_embedding_model_info(None).await?;
+            let supported_types = StatusApi::get_supported_file_types(&config).await?;
+            let database_info =
+                StatusApi::get_database_info(enhanced_index, &args.base_dir).await?;
+            let dependency_versions = StatusApi::get_dependency_versions().await?;
+            let consistency_report = StatusApi::validate_index_consistency(enhanced_index).await?;
+            let file_system_status = StatusApi::get_file_system_status(&config).await?;
+
+            #[derive(Serialize)]
+            struct StatusOutput {
+                index_statistics: janet_ai_retriever::status::IndexStatistics,
+                indexing_status: janet_ai_retriever::status::IndexingStatus,
+                index_health: janet_ai_retriever::status::IndexHealth,
+                indexing_configuration: janet_ai_retriever::status::IndexingConfiguration,
+                embedding_model_info: Option<janet_ai_retriever::status::EmbeddingModelInfo>,
+                supported_file_types: Vec<String>,
+                database_info: janet_ai_retriever::status::DatabaseInfo,
+                dependency_versions: janet_ai_retriever::status::DependencyVersions,
+                consistency_report: janet_ai_retriever::status::IndexConsistencyReport,
+                file_system_status: janet_ai_retriever::status::FileSystemStatus,
+            }
+
+            let output = StatusOutput {
+                index_statistics: index_stats,
+                indexing_status,
+                index_health,
+                indexing_configuration: indexing_config,
+                embedding_model_info: model_info,
+                supported_file_types: supported_types,
+                database_info,
+                dependency_versions,
+                consistency_report,
+                file_system_status,
+            };
+
+            match format {
+                OutputFormat::Json => {
+                    println!("{}", serde_json::to_string_pretty(&output)?);
+                }
+                OutputFormat::Summary | OutputFormat::Full => {
+                    println!("{}", toml::to_string_pretty(&output)?);
                 }
             }
 

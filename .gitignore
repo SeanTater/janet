@@ -32,7 +32,7 @@ cobertura.xml
 *.temp
 
 # Project-specific
-.code-assistant/
+.janet-ai/
 audit-results.json
 licenses.json
 
