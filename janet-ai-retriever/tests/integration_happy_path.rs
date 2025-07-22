@@ -273,9 +273,14 @@ async fn test_chunk_creation() -> Result<()> {
     engine.start().await?;
 
     // Create a large file that should be split into multiple chunks
-    let large_content = (0..50)
-        .map(|i| format!("fn function_{i}() {{\n    println!(\"Function {i}\");\n}}\n\n"))
-        .collect::<String>();
+    let large_content = (0..50).fold(String::new(), |mut acc, i| {
+        use std::fmt::Write;
+        let _ = write!(
+            acc,
+            "fn function_{i}() {{\n    println!(\"Function {i}\");\n}}\n\n"
+        );
+        acc
+    });
 
     let large_file = temp_dir.path().join("large.rs");
     tokio::fs::write(&large_file, &large_content).await?;

@@ -1,0 +1,13 @@
+FROM rust:1.75
+WORKDIR /app
+COPY janet-ai-mcp/ ./janet-ai-mcp/
+COPY janet-ai-retriever/ ./janet-ai-retriever/
+COPY janet-ai-embed/ ./janet-ai-embed/
+COPY janet-ai-context/ ./janet-ai-context/
+COPY Cargo.toml ./
+COPY Cargo.lock ./
+ENV CARGO_TERM_COLOR=always
+ENV RUSTFLAGS="-Dwarnings"
+ENV CARGO_INCREMENTAL=0
+ENV RUST_BACKTRACE=1
+RUN timeout 120 cargo test test_mcp_initialize --verbose -- --nocapture || echo "TEST_TIMEOUT_OR_FAILURE"

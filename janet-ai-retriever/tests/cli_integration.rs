@@ -425,7 +425,7 @@ async fn test_cli_database_state_edge_cases() -> Result<()> {
     assert!(stderr.contains("Error:"));
 
     // Create an empty file where database should be
-    let db_path = assist_dir.join("index.db");
+    let db_path = temp_dir.path().join(".janet-ai.db");
     std::fs::write(&db_path, "")?;
 
     // Our CLI should handle corrupted/empty database gracefully by reinitializing it
