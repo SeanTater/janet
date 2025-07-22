@@ -61,8 +61,9 @@ async fn test_server_kill() {
         .spawn()
         .expect("Failed to start server");
 
-    println!("Server started, waiting 2 seconds...");
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    println!("Server started, waiting for startup...");
+    let wait_time = if cfg!(windows) { 5 } else { 2 };
+    tokio::time::sleep(Duration::from_secs(wait_time)).await;
 
     println!("Killing server...");
     let kill_result = child.kill().await;
@@ -90,9 +91,10 @@ async fn test_mcp_initialize() {
         .spawn()
         .expect("Failed to start MCP server");
 
-    // Give the server a moment to start up (longer in CI)
+    // Give the server a moment to start up (longer in CI, especially on Windows)
     println!("Waiting for server to start...");
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    let startup_delay = if cfg!(windows) { 10 } else { 5 };
+    tokio::time::sleep(Duration::from_secs(startup_delay)).await;
 
     let stdin = child.stdin.as_mut().expect("Failed to get stdin");
     let stdout = child.stdout.as_mut().expect("Failed to get stdout");
@@ -110,10 +112,15 @@ async fn test_mcp_initialize() {
     stdin.flush().await.expect("Failed to flush stdin");
     println!("Request sent successfully");
 
-    // Read initialize response with longer timeout for CI
+    // Read initialize response with longer timeout for CI (especially Windows)
     println!("Waiting for response...");
     let mut response = String::new();
-    let read_result = timeout(Duration::from_secs(20), reader.read_line(&mut response)).await;
+    let response_timeout = if cfg!(windows) { 40 } else { 20 };
+    let read_result = timeout(
+        Duration::from_secs(response_timeout),
+        reader.read_line(&mut response),
+    )
+    .await;
 
     match read_result {
         Ok(Ok(_)) => {
@@ -292,10 +299,14 @@ async fn test_semantic_search_with_real_data() {
 
     // Read initialize response
     let mut response = String::new();
-    timeout(Duration::from_secs(10), reader.read_line(&mut response))
-        .await
-        .expect("Failed to get initialize response")
-        .expect("Failed to read initialize response");
+    let init_timeout = if cfg!(windows) { 20 } else { 10 };
+    timeout(
+        Duration::from_secs(init_timeout),
+        reader.read_line(&mut response),
+    )
+    .await
+    .expect("Failed to get initialize response")
+    .expect("Failed to read initialize response");
 
     assert!(response.contains("jsonrpc"));
     println!("Initialize OK");
@@ -322,7 +333,12 @@ async fn test_semantic_search_with_real_data() {
 
     // Read semantic search response
     response.clear();
-    let read_result = timeout(Duration::from_secs(15), reader.read_line(&mut response)).await;
+    let search_timeout = if cfg!(windows) { 30 } else { 15 };
+    let read_result = timeout(
+        Duration::from_secs(search_timeout),
+        reader.read_line(&mut response),
+    )
+    .await;
 
     if let Ok(Ok(_)) = read_result {
         println!("Semantic search response: {response}");
@@ -369,7 +385,12 @@ async fn test_semantic_search_with_real_data() {
 
     // Read HTTP search response
     response.clear();
-    let read_result = timeout(Duration::from_secs(15), reader.read_line(&mut response)).await;
+    let http_search_timeout = if cfg!(windows) { 30 } else { 15 };
+    let read_result = timeout(
+        Duration::from_secs(http_search_timeout),
+        reader.read_line(&mut response),
+    )
+    .await;
 
     if let Ok(Ok(_)) = read_result {
         println!("HTTP search response: {response}");
