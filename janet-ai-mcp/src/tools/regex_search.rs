@@ -178,7 +178,6 @@ pub async fn regex_search(
 }
 
 /// Check if a path matches any of the provided compiled glob patterns
-#[allow(dead_code)] // Used by regex_search function
 fn matches_any_glob(path: &Path, compiled_globs: &[glob::Pattern]) -> bool {
     let path_str = path.to_string_lossy();
 

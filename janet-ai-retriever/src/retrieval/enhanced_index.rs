@@ -211,6 +211,7 @@ impl IndexMetadata {
 }
 
 /// Enhanced file index with metadata tracking and embedding model compatibility checks
+#[derive(Debug)]
 pub struct EnhancedFileIndex {
     file_index: FileIndex,
     pool: SqlitePool,

@@ -11,10 +11,7 @@
 //! For embedding-based semantic search, actual embedding models would need to be downloaded.
 
 use anyhow::Result;
-use janet_ai_retriever::retrieval::{
-    indexing_engine::{IndexingEngine, IndexingEngineConfig},
-    indexing_mode::IndexingMode,
-};
+use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
 use std::path::Path;
 use tempfile::tempdir;
 use tokio::time::Duration;
@@ -41,7 +38,6 @@ async fn main() -> Result<()> {
 
     // Set up the indexing engine (without embeddings for this demo)
     let indexing_config = IndexingEngineConfig::new("test-repo".to_string(), repo_path.clone())
-        .with_mode(IndexingMode::FullReindex)
         .with_max_workers(2)
         .with_chunk_size(500);
 
@@ -54,7 +50,7 @@ async fn main() -> Result<()> {
 
     // Start the engine and perform full reindex
     println!("🔄 Starting full reindex...");
-    engine.start().await?;
+    engine.start(true).await?;
 
     // Wait for indexing to complete
     let mut attempts = 0;

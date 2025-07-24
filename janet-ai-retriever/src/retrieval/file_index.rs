@@ -103,7 +103,7 @@ pub struct ChunkRef {
     pub embedding: Option<Vec<half::f16>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FileIndex {
     pub(crate) base: PathBuf,
     pool: SqlitePool,

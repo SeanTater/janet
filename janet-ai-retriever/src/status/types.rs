@@ -1,6 +1,8 @@
+use super::{
+    DatabaseInfo, DependencyVersions, FileSystemStatus, IndexConsistencyReport,
+    IndexingPerformanceStats, NetworkStatus, SearchPerformanceStats, StaleFilesInfo,
+};
 use serde::{Deserialize, Serialize};
-use super::{DatabaseInfo, DependencyVersions, IndexConsistencyReport, FileSystemStatus, 
-           SearchPerformanceStats, IndexingPerformanceStats, StaleFilesInfo, NetworkStatus};
 
 /// Complete status information for the janet-ai system
 #[derive(Debug, Clone, Serialize, Deserialize)]
