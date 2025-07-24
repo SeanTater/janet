@@ -1750,6 +1750,7 @@ dependencies = [
  "async-trait",
  "derive_builder",
  "fastembed",
+ "fnv",
  "half",
  "hf-hub",
  "serde",

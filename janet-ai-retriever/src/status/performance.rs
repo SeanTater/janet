@@ -1,6 +1,40 @@
+//! Performance metrics and statistics for janet-ai-retriever
+//!
+//! This module provides data structures for monitoring and reporting performance metrics
+//! including search response times, indexing throughput, resource usage, and quality
+//! metrics. Used by the status API to provide detailed performance diagnostics.
+//!
+//! ## Key Components
+//!
+//! - **SearchPerformanceStats**: Search response times, quality metrics, and error rates
+//! - **SearchQualityMetrics**: Result relevance and user experience metrics
+//! - **IndexingPerformanceStats**: File processing throughput and resource usage
+//! - **DiskIOStats**: Disk I/O performance and storage utilization
+//! - **SearchErrorRates**: Error tracking by operation type
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use janet_ai_retriever::status::performance::{SearchPerformanceStats, SearchQualityMetrics};
+//! use std::collections::HashMap;
+//!
+//! // Performance stats would typically be collected during system operation
+//! let stats = SearchPerformanceStats {
+//!     average_response_time_ms: Some(150.5),
+//!     result_quality_metrics: SearchQualityMetrics {
+//!         average_results_count: Some(8.2),
+//!         average_relevance_score: Some(0.75),
+//!         zero_results_percentage: Some(5.2),
+//!     },
+//!     cache_hit_rate_percentage: Some(85.3),
+//!     common_query_patterns: vec!["function".to_string(), "class".to_string()],
+//!     error_rates: Default::default(),
+//! };
+//! ```
+
 use serde::{Deserialize, Serialize};
 
-/// Search performance statistics
+/// Search performance and quality statistics. See module docs for usage examples.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchPerformanceStats {
     /// Average search response time in milliseconds (last 100 queries)
@@ -15,6 +49,7 @@ pub struct SearchPerformanceStats {
     pub error_rates: SearchErrorRates,
 }
 
+/// Search result quality and relevance metrics. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchQualityMetrics {
     /// Average number of results returned
@@ -25,6 +60,7 @@ pub struct SearchQualityMetrics {
     pub zero_results_percentage: Option<f32>,
 }
 
+/// Error rates by search operation type. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchErrorRates {
     /// Semantic search error rate (0-1)
@@ -35,7 +71,7 @@ pub struct SearchErrorRates {
     pub total_queries_processed: usize,
 }
 
-/// Indexing performance statistics
+/// File indexing throughput and resource usage. See module docs for usage examples.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexingPerformanceStats {
     /// Files processed per minute (recent average)
@@ -50,6 +86,7 @@ pub struct IndexingPerformanceStats {
     pub peak_memory_usage_bytes: Option<u64>,
 }
 
+/// Disk I/O performance and storage metrics. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiskIOStats {
     /// Bytes read per second (recent average)
@@ -58,4 +95,14 @@ pub struct DiskIOStats {
     pub bytes_written_per_second: Option<u64>,
     /// Total disk space used for indexing in bytes
     pub total_disk_space_used_bytes: Option<u64>,
+}
+
+impl Default for SearchErrorRates {
+    fn default() -> Self {
+        Self {
+            semantic_search_error_rate: 0.0,
+            text_search_error_rate: 0.0,
+            total_queries_processed: 0,
+        }
+    }
 }

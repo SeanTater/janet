@@ -80,7 +80,27 @@ use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Row, SqlitePool};
 use std::path::{Path, PathBuf};
 
-/// Represents a file in the database
+/// Reference to a file stored in the index database.
+///
+/// This struct represents a complete file with its content, path, and hash.
+/// Files are the top-level units in the indexing system, with chunks belonging
+/// to files. The hash provides content-based deduplication and change detection.
+///
+/// # Fields
+/// * `relative_path` - Path relative to the project root, used for display and lookup
+/// * `content` - Raw file content as bytes to preserve exact content for hashing
+/// * `hash` - Blake3 hash of the content for deduplication and change detection
+///
+/// # Example
+/// ```
+/// use janet_ai_retriever::retrieval::file_index::FileRef;
+///
+/// let file_ref = FileRef {
+///     relative_path: "src/main.rs".to_string(),
+///     content: b"fn main() {}".to_vec(),
+///     hash: *blake3::hash(b"fn main() {}").as_bytes(),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct FileRef {
     /// The path to the file, relative to the root of the project
@@ -91,7 +111,36 @@ pub struct FileRef {
     pub hash: [u8; 32],
 }
 
-/// Represents a code chunk in the database
+/// Reference to a text chunk stored in the index database.
+///
+/// This struct represents a segment of text extracted from a file, along with
+/// its location information and optional embedding vector. Chunks are the
+/// primary searchable units in the indexing system.
+///
+/// # Fields
+/// * `id` - Database ID (None for new chunks, Some for existing ones)
+/// * `file_hash` - Hash of the parent file this chunk belongs to
+/// * `relative_path` - Path to the parent file (for convenience)
+/// * `line_start` - Starting line number of this chunk in the file
+/// * `line_end` - Ending line number of this chunk in the file
+/// * `content` - The actual text content of this chunk
+/// * `embedding` - Optional vector embedding for semantic search (f16 for efficiency)
+///
+/// # Example
+/// ```
+/// use janet_ai_retriever::retrieval::file_index::ChunkRef;
+/// use half::f16;
+///
+/// let chunk = ChunkRef {
+///     id: None,
+///     file_hash: [0u8; 32], // Would be actual file hash
+///     relative_path: "src/main.rs".to_string(),
+///     line_start: 1,
+///     line_end: 5,
+///     content: "fn main() {\n    println!(\"Hello!\");\n}".to_string(),
+///     embedding: Some(vec![f16::from_f32(0.1), f16::from_f32(0.2)]),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct ChunkRef {
     pub id: Option<i64>,
@@ -103,6 +152,49 @@ pub struct ChunkRef {
     pub embedding: Option<Vec<half::f16>>,
 }
 
+/// SQLite-based file and chunk indexing system.
+///
+/// FileIndex provides low-level database operations for storing and retrieving
+/// files and their associated text chunks. It serves as the foundation for the
+/// more advanced [`EnhancedFileIndex`](super::enhanced_index::EnhancedFileIndex).
+///
+/// The index uses SQLite with WAL mode for concurrent access and stores:
+/// - **Files**: Complete file content with paths and hashes
+/// - **Chunks**: Text segments extracted from files with location info
+/// - **Embeddings**: Optional f16 vector embeddings for semantic search
+///
+/// # Database Schema
+/// ```sql
+/// CREATE TABLE files (
+///     hash BLOB PRIMARY KEY,
+///     relative_path TEXT NOT NULL,
+///     content BLOB NOT NULL
+/// );
+///
+/// CREATE TABLE chunks (
+///     id INTEGER PRIMARY KEY AUTOINCREMENT,
+///     file_hash BLOB NOT NULL,
+///     relative_path TEXT NOT NULL,
+///     line_start INTEGER NOT NULL,
+///     line_end INTEGER NOT NULL,
+///     content TEXT NOT NULL,
+///     embedding BLOB
+/// );
+/// ```
+///
+/// # Example
+/// ```no_run
+/// use janet_ai_retriever::retrieval::file_index::FileIndex;
+/// use std::path::Path;
+///
+/// # async fn example() -> anyhow::Result<()> {
+/// // Open index in current directory
+/// let file_index = FileIndex::open(Path::new(".")).await?;
+///
+/// // Index stores files and chunks...
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug)]
 pub struct FileIndex {
     pub(crate) base: PathBuf,
@@ -110,6 +202,7 @@ pub struct FileIndex {
 }
 
 impl FileIndex {
+    /// Opens file index with persistent SQLite storage. See module docs for usage patterns.
     pub async fn open(base: &Path) -> Result<Self> {
         let db_path = base.join(".janet-ai.db");
 
@@ -129,6 +222,7 @@ impl FileIndex {
         Self::new_with_pool(base, pool).await
     }
 
+    /// Opens file index with in-memory SQLite storage for testing. See module docs for details.
     pub async fn open_memory(base: &Path) -> Result<Self> {
         let pool = SqlitePool::connect("sqlite::memory:").await?;
         Self::new_with_pool(base, pool).await
@@ -197,7 +291,7 @@ impl FileIndex {
         Ok(())
     }
 
-    /// Insert or update a file record
+    /// Inserts or updates file record with metadata. See module docs for schema details.
     pub async fn upsert_file(&self, file_ref: &FileRef) -> Result<()> {
         sqlx::query(
             r#"
@@ -218,7 +312,7 @@ impl FileIndex {
         Ok(())
     }
 
-    /// Get a file by hash
+    /// Retrieves file record by content hash. See module docs for schema details.
     pub async fn get_file(&self, hash: &[u8; 32]) -> Result<Option<FileRef>> {
         let row = sqlx::query("SELECT hash, relative_path, size FROM files WHERE hash = ?1")
             .bind(&hash[..])
@@ -238,7 +332,7 @@ impl FileIndex {
         }
     }
 
-    /// Insert or update chunks for a file
+    /// Inserts or updates multiple text chunks with embeddings. See module docs for usage patterns.
     pub async fn upsert_chunks(&self, chunks: &[ChunkRef]) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 

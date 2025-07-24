@@ -79,7 +79,7 @@ use anyhow::Result;
 use janet_ai_context::{TextChunk, create_builder_for_path};
 use std::path::Path;
 
-/// Configuration for chunking files
+/// Configuration for text chunking behavior. See module docs for usage examples.
 #[derive(Debug, Clone)]
 pub struct ChunkingConfig {
     /// Maximum size of each chunk in characters
@@ -98,6 +98,7 @@ impl Default for ChunkingConfig {
 }
 
 impl ChunkingConfig {
+    /// Creates config with default chunk size and specified repository name.
     pub fn new(repo_name: String) -> Self {
         Self {
             max_chunk_size: 2000,
@@ -105,13 +106,14 @@ impl ChunkingConfig {
         }
     }
 
+    /// Builder method to set maximum chunk size in characters.
     pub fn with_max_chunk_size(mut self, max_chunk_size: usize) -> Self {
         self.max_chunk_size = max_chunk_size;
         self
     }
 }
 
-/// Strategy for chunking files - delegates entirely to janet-ai-context
+/// Text chunking strategy using janet-ai-context. See module docs for examples.
 #[derive(Clone, Debug)]
 pub struct ChunkingStrategy {
     config: ChunkingConfig,
@@ -119,11 +121,13 @@ pub struct ChunkingStrategy {
 
 impl ChunkingStrategy {
     /// Create a new chunking strategy with the given configuration
+    /// Creates a new chunking strategy with the specified configuration.
     pub fn new(config: ChunkingConfig) -> Self {
         Self { config }
     }
 
     /// Chunk a file's content using janet-ai-context
+    /// Chunks file content using language-aware delimiters. See module docs for details.
     pub fn chunk_content(&self, file_path: &Path, content: &str) -> Result<Vec<TextChunk>> {
         // Use janet-ai-context to create the appropriate builder for this file type
         let builder = create_builder_for_path(
@@ -145,6 +149,7 @@ impl ChunkingStrategy {
     }
 
     /// Check if a file should be indexed based on its path
+    /// Returns whether a file path should be indexed based on its extension.
     pub fn should_index_file(&self, file_path: &Path) -> bool {
         // Skip hidden files and common binary/generated file extensions
         if let Some(filename) = file_path.file_name().and_then(|n| n.to_str()) {

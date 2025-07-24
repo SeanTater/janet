@@ -128,6 +128,32 @@ pub struct IndexingEngineConfig {
 }
 
 impl IndexingEngineConfig {
+    /// Create a new indexing engine configuration.
+    ///
+    /// This creates a configuration with sensible defaults for most use cases.
+    /// You can customize the configuration using the builder methods.
+    ///
+    /// # Arguments
+    /// * `repository` - Name of the repository being indexed (used for identification)
+    /// * `base_path` - Root directory containing files to index
+    ///
+    /// # Returns
+    /// A new configuration with default settings:
+    /// - 4 worker threads
+    /// - No embedding generation (text search only)
+    /// - 60 second timeout per file
+    /// - Default chunking strategy
+    ///
+    /// # Example
+    /// ```
+    /// use std::path::PathBuf;
+    /// use janet_ai_retriever::retrieval::indexing_engine::IndexingEngineConfig;
+    ///
+    /// let config = IndexingEngineConfig::new(
+    ///     "my-project".to_string(),
+    ///     PathBuf::from("/path/to/project")
+    /// );
+    /// ```
     pub fn new(repository: String, base_path: PathBuf) -> Self {
         Self {
             chunking_config: ChunkingConfig::new(repository.clone()),
@@ -140,17 +166,78 @@ impl IndexingEngineConfig {
         }
     }
 
+    /// Enable embedding generation with the specified configuration.
+    ///
+    /// When embeddings are enabled, the indexing engine will generate vector
+    /// embeddings for each text chunk, enabling semantic similarity search.
+    /// Without embeddings, only text-based search is available.
+    ///
+    /// # Arguments
+    /// * `config` - Embedding configuration specifying model and parameters
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_embed::EmbedConfig;
+    /// use janet_ai_retriever::retrieval::indexing_engine::IndexingEngineConfig;
+    /// use std::path::PathBuf;
+    ///
+    /// let embed_config = EmbedConfig::modernbert_large("/tmp/models");
+    /// let config = IndexingEngineConfig::new("my-project".to_string(), PathBuf::from("."))
+    ///     .with_embedding_config(embed_config);
+    /// ```
     pub fn with_embedding_config(mut self, config: EmbedConfig) -> Self {
         self.embedding_config = Some(config);
         self
     }
 
+    /// Set the maximum number of worker threads for parallel processing.
+    ///
+    /// More workers can speed up indexing but use more CPU and memory.
+    /// The optimal number depends on your system and the types of files being indexed.
+    ///
+    /// # Arguments
+    /// * `workers` - Number of worker threads (recommended: number of CPU cores)
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
+    /// ```
+    /// use janet_ai_retriever::retrieval::indexing_engine::IndexingEngineConfig;
+    /// use std::path::PathBuf;
+    ///
+    /// let config = IndexingEngineConfig::new("my-project".to_string(), PathBuf::from("."))
+    ///     .with_max_workers(8); // Use 8 worker threads
+    /// ```
     pub fn with_max_workers(mut self, workers: usize) -> Self {
         self.max_workers = workers;
         self.task_queue_config.max_workers = workers;
         self
     }
 
+    /// Set the maximum size for text chunks in characters.
+    ///
+    /// Smaller chunks provide more granular search results but may lose context.
+    /// Larger chunks preserve more context but may be less precise for search.
+    /// The optimal size depends on your use case and content type.
+    ///
+    /// # Arguments
+    /// * `size` - Maximum chunk size in characters (recommended: 500-2000)
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
+    /// ```
+    /// use janet_ai_retriever::retrieval::indexing_engine::IndexingEngineConfig;
+    /// use std::path::PathBuf;
+    ///
+    /// let config = IndexingEngineConfig::new("my-project".to_string(), PathBuf::from("."))
+    ///     .with_chunk_size(1000); // 1000 character chunks
+    /// ```
     pub fn with_chunk_size(mut self, size: usize) -> Self {
         self.chunking_config = self.chunking_config.with_max_chunk_size(size);
         self
@@ -190,12 +277,72 @@ pub struct ProcessingStats {
 }
 
 impl IndexingEngine {
-    /// Create a new indexing engine
+    /// Create a new indexing engine with the specified configuration.
+    ///
+    /// This initializes the indexing engine with a persistent SQLite database.
+    /// The engine starts in read-only mode - call [`start`](Self::start) to begin indexing.
+    ///
+    /// # Arguments
+    /// * `config` - Configuration specifying repository, paths, and indexing options
+    ///
+    /// # Returns
+    /// A new indexing engine ready for read-only operations
+    ///
+    /// # Errors
+    /// - Database initialization errors
+    /// - File system permission errors
+    /// - Configuration validation errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// use std::path::PathBuf;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let config = IndexingEngineConfig::new(
+    ///     "my-project".to_string(),
+    ///     PathBuf::from("/path/to/project")
+    /// );
+    ///
+    /// let engine = IndexingEngine::new(config).await?;
+    /// // Engine is ready for read-only operations (search)
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn new(config: IndexingEngineConfig) -> Result<Self> {
         Self::new_impl(config, false).await
     }
 
-    /// Create a new indexing engine with in-memory database (for testing)
+    /// Create a new indexing engine with an in-memory database.
+    ///
+    /// This is primarily intended for testing and development. The database
+    /// will be lost when the engine is dropped. For production use, prefer [`new`](Self::new).
+    ///
+    /// # Arguments
+    /// * `config` - Configuration specifying repository, paths, and indexing options
+    ///
+    /// # Returns
+    /// A new indexing engine with an in-memory database
+    ///
+    /// # Errors
+    /// Same as [`new`](Self::new) but without persistent storage errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// use std::path::PathBuf;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let config = IndexingEngineConfig::new(
+    ///     "test-project".to_string(),
+    ///     PathBuf::from("/tmp/test")
+    /// );
+    ///
+    /// let engine = IndexingEngine::new_memory(config).await?;
+    /// // Engine uses in-memory database - data will be lost on drop
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn new_memory(config: IndexingEngineConfig) -> Result<Self> {
         Self::new_impl(config, true).await
     }
@@ -265,7 +412,42 @@ impl IndexingEngine {
         })
     }
 
-    /// Start the indexing engine
+    /// Start the indexing engine for active indexing operations.
+    ///
+    /// This transitions the engine from read-only mode to active indexing mode,
+    /// enabling file monitoring, task processing, and index updates. The engine
+    /// must be started before calling methods like [`schedule_file_index`](Self::schedule_file_index)
+    /// or [`schedule_full_reindex`](Self::schedule_full_reindex).
+    ///
+    /// # Arguments
+    /// * `full_reindex` - Whether to perform a complete reindex of all files
+    ///   - `true`: Rebuild the entire index, then start continuous monitoring
+    ///   - `false`: Start continuous monitoring without rebuilding existing index
+    ///
+    /// # Returns
+    /// `Ok(())` if the engine started successfully
+    ///
+    /// # Errors
+    /// - Task queue initialization errors
+    /// - File system errors during initial indexing
+    /// - Database errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let mut engine = IndexingEngine::new(config).await?;
+    ///
+    /// // Start with full reindex - rebuilds everything
+    /// engine.start(true).await?;
+    ///
+    /// // Or start without full reindex - just monitor changes
+    /// // engine.start(false).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn start(&mut self, full_reindex: bool) -> Result<()> {
         info!(
             "Starting IndexingEngine with full_reindex: {}",
@@ -296,8 +478,43 @@ impl IndexingEngine {
         Ok(())
     }
 
-    /// Process tasks from the queue (simplified single-threaded version)
-    /// Processes all currently pending tasks, with a safety limit to prevent hanging
+    /// Process all currently pending tasks from the indexing queue.
+    ///
+    /// This method processes tasks that have been scheduled for indexing, including
+    /// file indexing, file removal, and other maintenance operations. It processes
+    /// all pending tasks up to a safety limit to prevent infinite loops.
+    ///
+    /// Tasks are processed sequentially and statistics are updated for each completed task.
+    /// If a task fails, the error is logged and the failure count is incremented, but
+    /// processing continues with the next task.
+    ///
+    /// # Returns
+    /// `Ok(())` when all pending tasks have been processed
+    ///
+    /// # Errors
+    /// This method does not return errors for individual task failures, but may return
+    /// errors for queue access issues or other system-level problems.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let mut engine = IndexingEngine::new(config).await?;
+    /// engine.start(true).await?;
+    ///
+    /// // Wait for all scheduled tasks to complete
+    /// while engine.get_queue_size().await > 0 {
+    ///     engine.process_pending_tasks().await?;
+    ///     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    /// }
+    ///
+    /// let stats = engine.get_stats().await;
+    /// println!("Processed {} files", stats.files_processed);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn process_pending_tasks(&self) -> Result<()> {
         let max_tasks_per_batch = 100; // Safety limit to prevent infinite loops
         let mut tasks_processed = 0;
@@ -488,7 +705,43 @@ impl IndexingEngine {
         })
     }
 
-    /// Schedule a full reindex by walking the directory tree and adding individual file tasks
+    /// Schedule a complete reindex of all files in the configured directory.
+    ///
+    /// This method recursively walks the directory tree starting from the configured
+    /// base path and schedules indexing tasks for all files that should be indexed
+    /// according to the chunking strategy. Files are processed in batches to avoid
+    /// overwhelming the task queue.
+    ///
+    /// The indexing engine must be started (not in read-only mode) before calling this method.
+    ///
+    /// # Returns
+    /// `Ok(())` when all files have been scheduled for indexing
+    ///
+    /// # Errors
+    /// - If called while the engine is in read-only mode
+    /// - File system errors during directory traversal
+    /// - Task queue submission errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let mut engine = IndexingEngine::new(config).await?;
+    /// engine.start(false).await?; // Start without automatic full reindex
+    ///
+    /// // Manually trigger a full reindex
+    /// engine.schedule_full_reindex().await?;
+    ///
+    /// // Process the scheduled tasks
+    /// while engine.get_queue_size().await > 0 {
+    ///     engine.process_pending_tasks().await?;
+    ///     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn schedule_full_reindex(&self) -> Result<()> {
         if !self.started_for_indexing {
             return Err(anyhow::anyhow!(
@@ -564,7 +817,41 @@ impl IndexingEngine {
         Ok(())
     }
 
-    /// Schedule indexing of a single file
+    /// Schedule indexing of a single file.
+    ///
+    /// This method adds a single file to the indexing queue for processing.
+    /// The file will be read, chunked, and have embeddings generated (if configured)
+    /// during the next call to [`process_pending_tasks`](Self::process_pending_tasks).
+    ///
+    /// The indexing engine must be started (not in read-only mode) before calling this method.
+    ///
+    /// # Arguments
+    /// * `file_path` - Path to the file to be indexed
+    ///
+    /// # Returns
+    /// `Ok(())` when the file has been successfully scheduled
+    ///
+    /// # Errors
+    /// - If called while the engine is in read-only mode
+    /// - Task queue submission errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let mut engine = IndexingEngine::new(config).await?;
+    /// engine.start(false).await?;
+    ///
+    /// // Schedule a specific file for indexing
+    /// engine.schedule_file_index(PathBuf::from("src/main.rs")).await?;
+    ///
+    /// // Process the scheduled file
+    /// engine.process_pending_tasks().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn schedule_file_index(&self, file_path: PathBuf) -> Result<()> {
         if !self.started_for_indexing {
             return Err(anyhow::anyhow!(
@@ -579,27 +866,153 @@ impl IndexingEngine {
             .map_err(|e| anyhow::anyhow!("Failed to schedule file index: {}", e))
     }
 
-    /// Get current processing statistics
+    /// Get current processing statistics for this indexing session.
+    ///
+    /// Returns real-time statistics about files processed, chunks created,
+    /// embeddings generated, and any errors encountered since the engine started.
+    ///
+    /// # Returns
+    /// ProcessingStats containing current session statistics
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let mut engine = IndexingEngine::new(config).await?;
+    /// engine.start(true).await?; // Start full reindex
+    ///
+    /// // Check progress
+    /// let stats = engine.get_stats().await;
+    /// println!("Processed {} files, created {} chunks",
+    ///          stats.files_processed, stats.chunks_created);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_stats(&self) -> ProcessingStats {
         self.stats.read().await.clone()
     }
 
-    /// Get index statistics from database
+    /// Get comprehensive statistics about the stored index.
+    ///
+    /// Returns statistics about the total content stored in the database,
+    /// including files, chunks, embeddings, and model information.
+    /// This reflects the complete index state, not just the current session.
+    ///
+    /// # Returns
+    /// IndexStats containing comprehensive database statistics
+    ///
+    /// # Errors
+    /// Database query errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let engine = IndexingEngine::new(config).await?;
+    ///
+    /// let stats = engine.get_index_stats().await?;
+    /// println!("Index contains {} files with {} chunks",
+    ///          stats.files_count, stats.chunks_count);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_index_stats(&self) -> Result<IndexStats> {
         self.enhanced_index.get_index_stats().await
     }
 
-    /// Get the current task queue size
+    /// Get the number of tasks currently waiting to be processed.
+    ///
+    /// This returns the size of the internal task queue. A size of 0 indicates
+    /// that all scheduled indexing work has been completed.
+    ///
+    /// # Returns
+    /// Number of pending tasks in the queue
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let mut engine = IndexingEngine::new(config).await?;
+    /// engine.start(true).await?; // Start indexing
+    ///
+    /// // Wait for indexing to complete
+    /// while engine.get_queue_size().await > 0 {
+    ///     engine.process_pending_tasks().await?;
+    ///     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_queue_size(&self) -> usize {
         self.task_queue.queue_size().await
     }
 
-    /// Get a reference to the enhanced file index for searching
+    /// Get a reference to the enhanced file index for performing searches.
+    ///
+    /// The enhanced file index provides access to search functionality including
+    /// text search, semantic search (if embeddings are available), and metadata queries.
+    /// This is the primary interface for querying the indexed content.
+    ///
+    /// # Returns
+    /// Reference to the EnhancedFileIndex for search operations
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let engine = IndexingEngine::new(config).await?;
+    ///
+    /// // Access the search interface
+    /// let index = engine.get_enhanced_index();
+    /// // Use index for search operations...
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn get_enhanced_index(&self) -> &EnhancedFileIndex {
         &self.enhanced_index
     }
 
-    /// Shutdown the indexing engine
+    /// Gracefully shut down the indexing engine.
+    ///
+    /// This method stops all workers, shuts down the task queue, and performs
+    /// cleanup operations. After shutdown, the engine cannot be restarted and
+    /// should be dropped.
+    ///
+    /// It's recommended to call this method before dropping the engine to ensure
+    /// all background tasks complete cleanly.
+    ///
+    /// # Returns
+    /// `Ok(())` when shutdown is complete
+    ///
+    /// # Errors
+    /// - Worker join errors (logged but not propagated)
+    /// - Task queue shutdown errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+    /// # use std::path::PathBuf;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// # let config = IndexingEngineConfig::new("test".to_string(), PathBuf::from("."));
+    /// let mut engine = IndexingEngine::new(config).await?;
+    /// engine.start(true).await?;
+    ///
+    /// // Do some work...
+    /// engine.process_pending_tasks().await?;
+    ///
+    /// // Clean shutdown
+    /// engine.shutdown().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn shutdown(&mut self) -> Result<()> {
         info!("Shutting down IndexingEngine");
 

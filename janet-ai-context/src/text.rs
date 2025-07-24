@@ -138,7 +138,31 @@ pub const CODE_DELIMITERS: &[&str] = &[
     r" ",                                  // Spaces
 ];
 
-/// Get appropriate delimiters based on file extension
+/// Get appropriate text delimiters based on file extension.
+///
+/// This function analyzes the file path and returns delimiters suitable for chunking
+/// that type of content. Different file types have different natural breaking points:
+/// - Code files use function/class boundaries
+/// - Markdown files use headers and paragraphs
+/// - Documentation files use documentation-specific delimiters
+///
+/// # Arguments
+/// * `path` - The file path to analyze
+///
+/// # Returns
+/// A static slice of delimiter strings, ordered by preference (most important first)
+///
+/// # Examples
+/// ```
+/// use std::path::Path;
+/// use janet_ai_context::get_delimiters_for_path;
+///
+/// let rust_delims = get_delimiters_for_path(Path::new("src/main.rs"));
+/// // Returns code delimiters like ["\nfn ", "\nstruct ", "\nimpl ", ...]
+///
+/// let md_delims = get_delimiters_for_path(Path::new("README.md"));
+/// // Returns markdown delimiters like ["\n# ", "\n## ", "\n\n", ...]
+/// ```
 pub fn get_delimiters_for_path(path: &Path) -> &'static [&'static str] {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("md") | Some("markdown") | Some("txt") => DEFAULT_MARKDOWN_DELIMITERS,
@@ -158,7 +182,35 @@ pub fn get_delimiters_for_path(path: &Path) -> &'static [&'static str] {
     }
 }
 
-/// Create a TextContextBuilder configured for the given file path
+/// Create a TextContextBuilder pre-configured for the given file path.
+///
+/// This is a convenience function that creates a builder with appropriate delimiters
+/// and settings based on the file type. It automatically:
+/// - Selects appropriate delimiters using [`get_delimiters_for_path`]
+/// - Sets up repository and file path information
+/// - Configures reasonable defaults for the file type
+///
+/// # Arguments
+/// * `repo` - Repository name for context
+/// * `file_path` - Path to the file that will be chunked
+/// * `max_chunk_size` - Maximum size in characters for each chunk
+///
+/// # Returns
+/// A configured TextContextBuilder ready for chunking
+///
+/// # Examples
+/// ```
+/// use std::path::Path;
+/// use janet_ai_context::create_builder_for_path;
+///
+/// let builder = create_builder_for_path(
+///     "my-project".to_string(),
+///     Path::new("src/lib.rs"),
+///     1000
+/// );
+///
+/// let chunks = builder.get_chunks("fn main() { println!(\"Hello!\"); }");
+/// ```
 pub fn create_builder_for_path(
     repo: String,
     file_path: &Path,

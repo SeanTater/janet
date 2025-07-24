@@ -1,3 +1,34 @@
+//! SQLite implementation of storage traits for janet-ai-retriever
+//!
+//! This module provides a concrete implementation of the storage traits using SQLite
+//! through the existing FileIndex infrastructure. It serves as an adapter between
+//! the abstract storage interfaces and the low-level SQLite operations.
+//!
+//! ## Key Components
+//!
+//! - **SqliteStore**: Adapter implementing ChunkStore, EmbeddingStore, and CombinedStore
+//! - **Type Conversions**: Mapping between internal ChunkRef and public Chunk types
+//! - **Vector Operations**: In-memory cosine similarity calculations for embeddings
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::{
+//!     storage::{sqlite_store::SqliteStore, ChunkStore},
+//!     retrieval::file_index::FileIndex
+//! };
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let file_index = FileIndex::open(Path::new(".")).await?;
+//! let store = SqliteStore::new(file_index);
+//!
+//! // Use any of the storage traits
+//! let chunks = store.search_text("function", false).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use super::{
     Chunk, ChunkFilter, ChunkId, ChunkMetadata, ChunkStore, CombinedStore, EmbeddingStore, FileHash,
 };
@@ -8,12 +39,13 @@ use async_trait::async_trait;
 use half::f16;
 use sqlx::Row;
 
-/// Implementation of storage traits for SQLite-based FileIndex
+/// SQLite-based implementation of storage traits. See module docs for usage examples.
 pub struct SqliteStore {
     file_index: FileIndex,
 }
 
 impl SqliteStore {
+    /// Creates a new SQLite store from a FileIndex. See module docs for usage examples.
     pub fn new(file_index: FileIndex) -> Self {
         Self { file_index }
     }
