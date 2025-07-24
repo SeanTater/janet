@@ -1,6 +1,5 @@
 use anyhow::Result;
-#[allow(unused_imports)]
-use half::f16;
+use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Row, SqlitePool};
 use std::path::{Path, PathBuf};
 
@@ -36,9 +35,20 @@ pub struct FileIndex {
 impl FileIndex {
     pub async fn open(base: &Path) -> Result<Self> {
         let db_path = base.join(".janet-ai.db");
-        let database_url = format!("sqlite:{}", db_path.display());
 
-        let pool = SqlitePool::connect(&database_url).await?;
+        let pool = SqlitePool::connect_with(
+            SqliteConnectOptions::new()
+                .filename(db_path)
+                .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                .busy_timeout(std::time::Duration::from_secs(5))
+                .foreign_keys(true)
+                .create_if_missing(true)
+                .auto_vacuum(sqlx::sqlite::SqliteAutoVacuum::Full)
+                .page_size(1 << 16)
+                .optimize_on_close(true, 1 << 10),
+        )
+        .await?;
         Self::new_with_pool(base, pool).await
     }
 
@@ -48,20 +58,6 @@ impl FileIndex {
     }
 
     async fn new_with_pool(base: &Path, pool: SqlitePool) -> Result<Self> {
-        // Configure SQLite for concurrency
-        sqlx::query("PRAGMA journal_mode = WAL")
-            .execute(&pool)
-            .await?;
-        sqlx::query("PRAGMA busy_timeout = 5000")
-            .execute(&pool)
-            .await?;
-        sqlx::query("PRAGMA synchronous = NORMAL")
-            .execute(&pool)
-            .await?;
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&pool)
-            .await?;
-
         // Create tables directly
         Self::create_tables(&pool).await?;
 
@@ -482,9 +478,9 @@ mod tests {
                 line_end: 1,
                 content: "fn main() {}".to_string(),
                 embedding: Some(vec![
-                    f16::from_f32(0.1),
-                    f16::from_f32(0.2),
-                    f16::from_f32(0.3),
+                    half::f16::from_f32(0.1),
+                    half::f16::from_f32(0.2),
+                    half::f16::from_f32(0.3),
                 ]),
             },
             ChunkRef {
@@ -495,9 +491,9 @@ mod tests {
                 line_end: 2,
                 content: "fn test() {}".to_string(),
                 embedding: Some(vec![
-                    f16::from_f32(0.4),
-                    f16::from_f32(0.5),
-                    f16::from_f32(0.6),
+                    half::f16::from_f32(0.4),
+                    half::f16::from_f32(0.5),
+                    half::f16::from_f32(0.6),
                 ]),
             },
         ];
@@ -513,7 +509,11 @@ mod tests {
         assert!(fetched_chunks[0].embedding.is_some());
         assert_eq!(
             fetched_chunks[0].embedding.as_ref().unwrap(),
-            &vec![f16::from_f32(0.1), f16::from_f32(0.2), f16::from_f32(0.3)]
+            &vec![
+                half::f16::from_f32(0.1),
+                half::f16::from_f32(0.2),
+                half::f16::from_f32(0.3)
+            ]
         );
 
         Ok(())

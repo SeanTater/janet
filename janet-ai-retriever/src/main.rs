@@ -390,6 +390,15 @@ async fn run() -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!("Embedding vector cannot be empty"));
             }
 
+            // Validate threshold range
+            if let Some(thresh) = threshold {
+                if !(0.0..=1.0).contains(&thresh) {
+                    return Err(anyhow::anyhow!(
+                        "Similarity threshold must be between 0.0 and 1.0, got {thresh}"
+                    ));
+                }
+            }
+
             let file_index = FileIndex::open(&args.base_dir).await?;
             let store = SqliteStore::new(file_index);
 
