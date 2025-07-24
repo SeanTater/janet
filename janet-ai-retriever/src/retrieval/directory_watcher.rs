@@ -29,24 +29,17 @@
 //!
 //! ## Usage
 //!
-//! Typically used internally by IndexingEngine, but can be used standalone:
+//! Typically used internally by IndexingEngine for filesystem monitoring.
 //!
 //! ```rust,no_run
-//! use janet_ai_retriever::retrieval::directory_watcher::DirectoryTracker;
-//! use std::path::Path;
-//! use tokio::sync::mpsc;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let (event_tx, mut event_rx) = mpsc::channel(1000);
-//!
-//! // Start monitoring a directory
-//! let tracker = DirectoryTracker::new(Path::new("."), event_tx).await?;
-//!
-//! // Process file change events
-//! while let Some(changed_path) = event_rx.recv().await {
-//!     println!("File changed: {:?}", changed_path);
-//!     // Trigger re-indexing for this file
-//! }
+//! // DirectoryTracker is used internally by IndexingEngine
+//! // and integrates with the analyzer to process file changes.
+//! // It handles debounced events and filters relevant files automatically.
+//! # use anyhow::Result;
+//! # async fn example() -> Result<()> {
+//! // DirectoryTracker usage is handled by IndexingEngine
+//! // which coordinates file watching, analysis, and indexing
+//! println!("Directory watching is integrated into IndexingEngine");
 //! # Ok(())
 //! # }
 //! ```

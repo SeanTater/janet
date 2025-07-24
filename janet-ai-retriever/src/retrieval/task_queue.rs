@@ -16,25 +16,31 @@
 //!
 //! ### Priority-Based Scheduling
 //! ```rust,no_run
-//! use janet_ai_retriever::retrieval::task_queue::{TaskQueue, IndexingTask, TaskPriority, TaskType};
+//! use janet_ai_retriever::retrieval::task_queue::{TaskQueue, IndexingTask, TaskPriority, TaskType, TaskQueueConfig};
 //! use std::path::Path;
+//! use std::time::Duration;
 //!
 //! # async fn example() -> anyhow::Result<()> {
-//! let mut queue = TaskQueue::new(4).await; // 4 workers
+//! let config = TaskQueueConfig {
+//!     max_queue_size: 1000,
+//!     max_workers: 4,
+//!     task_timeout: Duration::from_secs(30),
+//!     batch_size: 10,
+//!     batch_interval: Duration::from_millis(100),
+//! };
+//! let mut queue = TaskQueue::new(config);
 //!
 //! // High priority: recently modified files
-//! queue.enqueue(IndexingTask::new(
-//!     TaskType::IndexFile,
-//!     Path::new("src/main.rs").to_path_buf(),
+//! let high_priority_task = IndexingTask::new(
+//!     TaskType::IndexFile { path: Path::new("src/main.rs").to_path_buf() },
 //!     TaskPriority::High
-//! )).await;
+//! );
 //!
 //! // Background: routine indexing
-//! queue.enqueue(IndexingTask::new(
-//!     TaskType::IndexFile,
-//!     Path::new("docs/readme.md").to_path_buf(),
+//! let background_task = IndexingTask::new(
+//!     TaskType::IndexFile { path: Path::new("docs/readme.md").to_path_buf() },
 //!     TaskPriority::Background
-//! )).await;
+//! );
 //! # Ok(())
 //! # }
 //! ```
@@ -55,16 +61,18 @@
 //!
 //! ```rust,no_run
 //! use janet_ai_retriever::retrieval::task_queue::{TaskQueue, TaskQueueConfig};
+//! use std::time::Duration;
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let config = TaskQueueConfig {
 //!     max_workers: 8,                    // More workers for faster processing
 //!     max_queue_size: 10000,             // Prevent memory overflow
-//!     retry_attempts: 3,                 // Retry failed tasks
-//!     retry_delay: std::time::Duration::from_secs(5),
+//!     task_timeout: Duration::from_secs(30),
+//!     batch_size: 16,                    // Batch size for efficiency
+//!     batch_interval: Duration::from_millis(100),
 //! };
 //!
-//! let queue = TaskQueue::with_config(config).await;
+//! let queue = TaskQueue::new(config);
 //! # Ok(())
 //! # }
 //! ```
