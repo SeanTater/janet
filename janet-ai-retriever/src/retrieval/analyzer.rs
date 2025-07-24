@@ -1,3 +1,79 @@
+//! File analysis and processing strategy determination.
+//!
+//! This module provides file type analysis and determines appropriate processing strategies
+//! for different types of source code files. It handles file type detection, language-specific
+//! chunking strategies, and integration with embedding providers.
+//!
+//! ## Key Components
+//!
+//! - **AnalyzerTrait**: Interface for file analysis implementations
+//! - **BertAnalyzer**: Default analyzer using BERT-style embeddings
+//! - **BertChunkConfig**: Configuration for chunking and embedding parameters
+//!
+//! ## Features
+//!
+//! ### File Type Detection
+//! - Supports common programming languages (Rust, Python, JavaScript, etc.)
+//! - Language-specific chunking strategies (respects function/class boundaries)
+//! - Configurable file type inclusion/exclusion
+//!
+//! ### Smart Chunking
+//! - Line-based chunking with configurable sizes
+//! - Overlapping chunks for better context preservation
+//! - Language-aware boundaries (avoids splitting logical units)
+//!
+//! ### Embedding Integration
+//! - Direct integration with janet-ai-embed providers
+//! - Configurable embedding models and parameters
+//! - Batch processing for efficient embedding generation
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::analyzer::{AnalyzerTrait, BertAnalyzer, BertChunkConfig};
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let config = BertChunkConfig {
+//!     model_base_path: Some("./models".to_string()),
+//!     model_name: Some("snowflake-arctic-embed-xs".to_string()),
+//!     chunk_size_lines: 20,
+//!     chunk_step_lines: 15,  // 5 lines overlap
+//!     generate_embeddings: true,
+//!     max_files: None,
+//! };
+//!
+//! let analyzer = BertAnalyzer::new(config).await?;
+//!
+//! // Check if file should be processed
+//! if analyzer.should_process_file(Path::new("src/main.rs"))? {
+//!     // Analyze and chunk the file
+//!     let chunks = analyzer.analyze_file(Path::new("src/main.rs"), &file_ref).await?;
+//!     println!("Generated {} chunks", chunks.len());
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Configuration
+//!
+//! ### Chunking Strategy
+//! - **chunk_size_lines**: Number of lines per chunk (affects search granularity)
+//! - **chunk_step_lines**: Step size between chunks (overlap = size - step)
+//! - Overlap helps preserve context across chunk boundaries
+//!
+//! ### Embedding Models
+//! - Supports FastEmbed embedding providers
+//! - Configurable model selection and caching
+//! - Batch processing for memory efficiency
+//!
+//! ## Performance Considerations
+//!
+//! - Larger chunks = fewer database entries but less precise search
+//! - Smaller chunks = more precise search but more storage overhead
+//! - Overlap improves search quality but increases storage
+//! - Embedding generation is the bottleneck for large codebases
+
 use super::file_index::{ChunkRef, FileIndex, FileRef};
 use anyhow::Result;
 use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider, TokenizerConfig};

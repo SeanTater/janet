@@ -1,3 +1,101 @@
+//! Enhanced file index with metadata tracking and embedding model compatibility.
+//!
+//! This module provides a high-level wrapper around [`FileIndex`] that adds metadata
+//! tracking, embedding model management, and version compatibility checks. It's designed
+//! for production use where you need to track multiple embedding models, system versions,
+//! and ensure compatibility across upgrades.
+//!
+//! ## Key Components
+//!
+//! - **EnhancedFileIndex**: Wrapper around FileIndex with metadata capabilities
+//! - **EmbeddingModelMetadata**: Tracks embedding model configurations and compatibility
+//! - **IndexMetadata**: Tracks system versions and repository information
+//! - **IndexStats**: Provides statistics about the indexed data
+//!
+//! ## Additional Database Schema
+//!
+//! Beyond the base FileIndex schema, this adds:
+//!
+//! ```sql
+//! -- Index metadata: tracks system versions and repository info
+//! CREATE TABLE index_metadata (
+//!     id INTEGER PRIMARY KEY,
+//!     repository TEXT UNIQUE,          -- repository identifier
+//!     retriever_version TEXT,          -- janet-ai-retriever version
+//!     context_version TEXT,            -- janet-ai-context version
+//!     embed_version TEXT,              -- janet-ai-embed version
+//!     created_at INTEGER,              -- unix timestamp
+//!     updated_at INTEGER,              -- unix timestamp
+//!     metadata_json TEXT               -- additional metadata
+//! );
+//!
+//! -- Embedding models: tracks different embedding configurations
+//! CREATE TABLE embedding_models (
+//!     model_id TEXT PRIMARY KEY,       -- unique model identifier
+//!     model_name TEXT,                 -- human-readable name
+//!     provider TEXT,                   -- embedding provider
+//!     dimension INTEGER,               -- vector dimension
+//!     model_version TEXT,              -- model version
+//!     normalized BOOLEAN,              -- whether vectors are normalized
+//!     config_json TEXT                 -- additional configuration
+//! );
+//!
+//! -- Enhanced chunks table adds model tracking
+//! ALTER TABLE chunks ADD COLUMN model_id TEXT REFERENCES embedding_models(model_id);
+//! ```
+//!
+//! ## Features
+//!
+//! ### Model Compatibility Checking
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, EmbeddingModelMetadata};
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let index = EnhancedFileIndex::open(Path::new(".")).await?;
+//!
+//! let model = EmbeddingModelMetadata::new(
+//!     "snowflake-arctic-embed-xs".to_string(),
+//!     "fastembed".to_string(),
+//!     384
+//! ).with_normalized(true);
+//!
+//! // Check if model is compatible with existing embeddings
+//! let compatible = index.check_model_compatibility(&model).await?;
+//! if !compatible {
+//!     // Need to re-embed with new model
+//!     index.delete_chunks_by_model(&model.model_id()).await?;
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Multi-Model Support
+//! ```rust,no_run
+//! # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+//! # use std::path::Path;
+//! # async fn example() -> anyhow::Result<()> {
+//! let index = EnhancedFileIndex::open(Path::new(".")).await?;
+//!
+//! // Get chunks from a specific model
+//! let model_chunks = index.get_chunks_by_model("fastembed:snowflake-arctic-embed-xs:latest:384:norm").await?;
+//!
+//! // Search with similarity
+//! let query_embedding = vec![half::f16::from_f32(0.1); 384];
+//! let similar_chunks = index.search_similar_chunks(&query_embedding, 10).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## When to Use
+//!
+//! - **Production systems** that need model versioning
+//! - **Multi-model environments** with different embedding strategies
+//! - **Long-lived indexes** that need migration support
+//! - **Systems requiring audit trails** of embedding model changes
+//!
+//! For simple use cases, [`FileIndex`] may be sufficient.
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};

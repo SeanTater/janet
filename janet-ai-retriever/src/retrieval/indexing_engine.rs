@@ -1,3 +1,104 @@
+//! High-level indexing engine that orchestrates the complete indexing pipeline.
+//!
+//! This module provides the main orchestration layer for janet-ai-retriever, coordinating
+//! file discovery, chunking, embedding generation, and storage. It manages the entire
+//! indexing workflow from raw files to searchable chunks with embeddings.
+//!
+//! ## Key Components
+//!
+//! - **IndexingEngine**: Main orchestrator for the indexing pipeline
+//! - **IndexingEngineConfig**: Configuration for indexing behavior and resources
+//! - **IndexingStats**: Runtime statistics about indexing progress
+//!
+//! ## Pipeline Flow
+//!
+//! ```text
+//! Files → Analyzer → ChunkingStrategy → Embeddings → EnhancedFileIndex
+//!   ↑         ↑            ↑               ↑              ↑
+//!   |    FileScanner   TextContextBuilder  FastEmbed   SQLite Storage
+//!   |         |            |               |              |
+//! DirectoryWatcher → TaskQueue → EmbeddingProvider → IndexMetadata
+//! ```
+//!
+//! ## Features
+//!
+//! ### Multiple Indexing Modes
+//! - **FullReindex**: Complete rebuild of the index
+//! - **ContinuousMonitoring**: Watch for file changes and update incrementally
+//! - **ReadOnly**: Access existing index without modifications
+//!
+//! ### Async Task Processing
+//! - Configurable worker pools for parallel processing
+//! - Priority-based task queuing
+//! - Graceful error handling and retry logic
+//!
+//! ### Resource Management
+//! - Configurable memory limits for embedding models
+//! - Batch processing for efficient embedding generation
+//! - Connection pooling for database operations
+//!
+//! ## Usage
+//!
+//! ### Basic Indexing
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::{
+//!     indexing_engine::{IndexingEngine, IndexingEngineConfig},
+//!     indexing_mode::IndexingMode,
+//! };
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let config = IndexingEngineConfig::new(
+//!     "my-project".to_string(),
+//!     Path::new(".").to_path_buf()
+//! )
+//! .with_mode(IndexingMode::ContinuousMonitoring)
+//! .with_max_workers(4)
+//! .with_chunk_size(1000);
+//!
+//! let mut engine = IndexingEngine::new(config).await?;
+//! engine.start().await?;
+//!
+//! // Process pending work
+//! while engine.get_queue_size().await > 0 {
+//!     engine.process_pending_tasks().await?;
+//!     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+//! }
+//!
+//! let stats = engine.get_stats().await;
+//! println!("Processed {} files, created {} chunks",
+//!          stats.files_processed, stats.chunks_created);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Read-Only Access
+//! ```rust,no_run
+//! # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
+//! # use janet_ai_retriever::retrieval::indexing_mode::IndexingMode;
+//! # use std::path::Path;
+//! # async fn example() -> anyhow::Result<()> {
+//! let config = IndexingEngineConfig::new(
+//!     "existing-project".to_string(),
+//!     Path::new(".").to_path_buf()
+//! ).with_mode(IndexingMode::ReadOnly);
+//!
+//! let engine = IndexingEngine::new(config).await?;
+//! let enhanced_index = engine.get_enhanced_index();
+//! let stats = enhanced_index.get_index_stats().await?;
+//! println!("Index contains {} files with {} chunks",
+//!          stats.files_count, stats.chunks_count);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Performance Considerations
+//!
+//! - **Worker Count**: More workers = faster processing but higher memory usage
+//! - **Chunk Size**: Smaller chunks = better search granularity but more storage
+//! - **Batch Size**: Larger batches = more efficient embedding but higher memory peaks
+//! - **Embedding Models**: Smaller models = faster processing but potentially lower quality
+
 use anyhow::Result;
 use blake3;
 use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider};
