@@ -1,3 +1,79 @@
+//! File analysis and processing strategy determination.
+//!
+//! This module provides file type analysis and determines appropriate processing strategies
+//! for different types of source code files. It handles file type detection, language-specific
+//! chunking strategies, and integration with embedding providers.
+//!
+//! ## Key Components
+//!
+//! - **AnalyzerTrait**: Interface for file analysis implementations
+//! - **BertAnalyzer**: Default analyzer using BERT-style embeddings
+//! - **BertChunkConfig**: Configuration for chunking and embedding parameters
+//!
+//! ## Features
+//!
+//! ### File Type Detection
+//! - Supports common programming languages (Rust, Python, JavaScript, etc.)
+//! - Language-specific chunking strategies (respects function/class boundaries)
+//! - Configurable file type inclusion/exclusion
+//!
+//! ### Smart Chunking
+//! - Line-based chunking with configurable sizes
+//! - Overlapping chunks for better context preservation
+//! - Language-aware boundaries (avoids splitting logical units)
+//!
+//! ### Embedding Integration
+//! - Direct integration with janet-ai-embed providers
+//! - Configurable embedding models and parameters
+//! - Batch processing for efficient embedding generation
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::analyzer::{AnalyzerTrait, RemoteBertChunkAnalyzer, BertChunkConfig};
+//! use janet_ai_retriever::retrieval::file_index::FileIndex;
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let config = BertChunkConfig {
+//!     model_base_path: Some("./models".to_string()),
+//!     model_name: Some("snowflake-arctic-embed-xs".to_string()),
+//!     chunk_size_lines: 20,
+//!     chunk_step_lines: 15,  // 5 lines overlap
+//!     generate_embeddings: true,
+//! };
+//!
+//! // Create a file index first (required by analyzer)
+//! let temp_dir = tempfile::tempdir()?;
+//! let file_index = FileIndex::open_memory(temp_dir.path()).await?;
+//! let analyzer = RemoteBertChunkAnalyzer::new(file_index, config);
+//!
+//! // Analyze a file (processes and stores chunks automatically)
+//! analyzer.analyze(Path::new("src/main.rs")).await?;
+//! println!("File analyzed and chunks stored in index");
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Configuration
+//!
+//! ### Chunking Strategy
+//! - **chunk_size_lines**: Number of lines per chunk (affects search granularity)
+//! - **chunk_step_lines**: Step size between chunks (overlap = size - step)
+//! - Overlap helps preserve context across chunk boundaries
+//!
+//! ### Embedding Models
+//! - Supports FastEmbed embedding providers
+//! - Configurable model selection and caching
+//! - Batch processing for memory efficiency
+//!
+//! ## Performance Considerations
+//!
+//! - Larger chunks = fewer database entries but less precise search
+//! - Smaller chunks = more precise search but more storage overhead
+//! - Overlap improves search quality but increases storage
+//! - Embedding generation is the bottleneck for large codebases
+
 use super::file_index::{ChunkRef, FileIndex, FileRef};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -7,6 +83,23 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// Configuration for the BERT-based chunk analyzer.
+///
+/// This struct defines how files should be analyzed and chunked for indexing,
+/// including embedding model settings and chunking parameters.
+///
+/// # Examples
+/// ```
+/// use janet_ai_retriever::retrieval::analyzer::BertChunkConfig;
+///
+/// let config = BertChunkConfig {
+///     model_base_path: Some("models".to_string()),
+///     model_name: Some("snowflake-arctic-embed-xs".to_string()),
+///     chunk_size_lines: 100,
+///     chunk_step_lines: 50,
+///     generate_embeddings: true,
+/// };
+/// ```
 #[derive(Debug, serde::Deserialize)]
 pub struct BertChunkConfig {
     /// Base path for embedding models (e.g., "models/")
@@ -33,13 +126,72 @@ impl Default for BertChunkConfig {
     }
 }
 
-/// The new trait that abstracts the analyzer.
+/// Trait for file analyzers that process files for indexing.
+///
+/// This trait abstracts the analysis process, allowing different implementations
+/// to handle file analysis in various ways (e.g., different chunking strategies,
+/// embedding models, or analysis approaches).
+///
+/// Implementors should handle the complete analysis pipeline including:
+/// - Reading and parsing file content
+/// - Chunking the content appropriately
+/// - Generating embeddings if needed
+/// - Storing results in the index
+///
+/// # Example Implementation
+/// ```no_run
+/// use janet_ai_retriever::retrieval::analyzer::AnalyzerTrait;
+/// use async_trait::async_trait;
+/// use std::path::Path;
+/// use anyhow::Result;
+///
+/// struct CustomAnalyzer;
+///
+/// #[async_trait]
+/// impl AnalyzerTrait for CustomAnalyzer {
+///     async fn analyze(&self, absolute_path: &Path) -> Result<()> {
+///         // Custom analysis logic here
+///         Ok(())
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait AnalyzerTrait: Send + Sync {
+    /// Analyze a file at the given absolute path.
+    ///
+    /// This method should perform the complete analysis of a single file,
+    /// including reading, chunking, embedding generation, and index storage.
+    ///
+    /// # Arguments
+    /// * `absolute_path` - The absolute path to the file to analyze
+    ///
+    /// # Returns
+    /// `Ok(())` if analysis completed successfully, or an error if analysis failed
+    ///
+    /// # Errors
+    /// - File reading errors
+    /// - Parsing or processing errors
+    /// - Embedding generation failures
+    /// - Database storage errors
     async fn analyze(&self, absolute_path: &Path) -> Result<()>;
 }
 
-/// The original Analyzer implementing the trait.
+/// BERT-based chunk analyzer that processes files using embedding models.
+///
+/// This analyzer processes files by chunking them into overlapping segments
+/// and optionally generating embeddings using a BERT-based model. It integrates
+/// with the file index to store processed chunks for retrieval.
+///
+/// The analyzer supports:
+/// - Configurable chunking with overlapping segments
+/// - Optional embedding generation using FastEmbed
+/// - Git-aware file filtering using gitignore rules
+/// - Async processing for better performance
+///
+/// # Architecture
+/// ```text
+/// File → GitIgnore Filter → Chunking → Embedding → FileIndex Storage
+/// ```
 pub struct RemoteBertChunkAnalyzer {
     file_index: FileIndex,
     config: BertChunkConfig,
@@ -48,6 +200,7 @@ pub struct RemoteBertChunkAnalyzer {
 }
 
 impl RemoteBertChunkAnalyzer {
+    /// Creates new analyzer with file index and configuration. See module docs for usage patterns.
     pub fn new(file_index: FileIndex, config: BertChunkConfig) -> Self {
         Self {
             gitignore: ignore::gitignore::Gitignore::new(&file_index.base).0,
@@ -58,6 +211,7 @@ impl RemoteBertChunkAnalyzer {
     }
 
     /// Initialize the embedding provider if embeddings are enabled
+    /// Initializes embedding provider if embeddings are enabled. See module docs for details.
     pub async fn initialize_embeddings(&mut self) -> Result<()> {
         if !self.config.generate_embeddings {
             tracing::info!("Embeddings disabled in configuration");
@@ -93,7 +247,7 @@ impl RemoteBertChunkAnalyzer {
         Ok(())
     }
 
-    /// Create and initialize a new analyzer with embeddings
+    /// Creates and initializes analyzer with embeddings in one step. See module docs for usage patterns.
     pub async fn create_with_embeddings(
         file_index: FileIndex,
         config: BertChunkConfig,
@@ -103,6 +257,7 @@ impl RemoteBertChunkAnalyzer {
         Ok(analyzer)
     }
 
+    /// Processes file by chunking and generating embeddings. See module docs for pipeline details.
     pub async fn chunk_file(&self, relative_path: &Path) -> Result<Option<Vec<ChunkRef>>> {
         // Naive implementation of chunking
         let loc = &self.file_index.base.join(relative_path);
@@ -208,8 +363,34 @@ impl AnalyzerTrait for RemoteBertChunkAnalyzer {
     }
 }
 
-/// A new mock analyzer for testing.
-/// It records every path passed to `analyze` in an internal vector.
+/// Mock analyzer implementation for testing purposes.
+///
+/// This analyzer records all paths passed to [`analyze`](AnalyzerTrait::analyze) without
+/// performing any actual analysis. It's useful for testing file discovery logic
+/// and other components that depend on analyzers without the overhead of real
+/// text processing and embedding generation.
+///
+/// The mock analyzer is thread-safe and can be used in concurrent scenarios.
+///
+/// # Example
+/// ```
+/// use janet_ai_retriever::retrieval::analyzer::{MockAnalyzer, AnalyzerTrait};
+/// use std::path::Path;
+///
+/// # async fn example() -> anyhow::Result<()> {
+/// let analyzer = MockAnalyzer::new();
+///
+/// // Simulate analysis calls
+/// analyzer.analyze(Path::new("file1.rs")).await?;
+/// analyzer.analyze(Path::new("file2.rs")).await?;
+///
+/// // Check which files were "analyzed"
+/// let calls = analyzer.calls.lock().unwrap();
+/// assert_eq!(calls.len(), 2);
+/// assert_eq!(calls[0], Path::new("file1.rs"));
+/// # Ok(())
+/// # }
+/// ```
 pub struct MockAnalyzer {
     pub calls: Arc<Mutex<Vec<PathBuf>>>,
 }
@@ -221,6 +402,7 @@ impl Default for MockAnalyzer {
 }
 
 impl MockAnalyzer {
+    /// Creates new mock analyzer for testing. See module docs for usage examples.
     pub fn new() -> Self {
         Self {
             calls: Arc::new(Mutex::new(Vec::new())),

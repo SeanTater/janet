@@ -4,7 +4,6 @@ use janet_ai_retriever::{
     retrieval::{
         file_index::FileIndex,
         indexing_engine::{IndexingEngine, IndexingEngineConfig},
-        indexing_mode::IndexingMode,
     },
     storage::{ChunkFilter, ChunkStore, CombinedStore, sqlite_store::SqliteStore},
 };
@@ -172,11 +171,6 @@ async fn run() -> anyhow::Result<()> {
             // Set up the indexing engine configuration
             let indexing_config =
                 IndexingEngineConfig::new("cli-indexing".to_string(), repo_path.clone())
-                    .with_mode(if force {
-                        IndexingMode::FullReindex
-                    } else {
-                        IndexingMode::ContinuousMonitoring
-                    })
                     .with_max_workers(max_workers)
                     .with_chunk_size(chunk_size);
 
@@ -189,7 +183,7 @@ async fn run() -> anyhow::Result<()> {
 
             // Start the engine and perform indexing
             println!("🔄 Starting indexing...");
-            engine.start().await?;
+            engine.start(force).await?;
 
             // Wait for indexing to complete
             let mut attempts = 0;
@@ -497,16 +491,12 @@ async fn run() -> anyhow::Result<()> {
         }
         Commands::Status { format } => {
             use janet_ai_retriever::{
-                retrieval::{
-                    indexing_engine::{IndexingEngine, IndexingEngineConfig},
-                    indexing_mode::IndexingMode,
-                },
+                retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig},
                 status::StatusApi,
             };
 
             // Create a read-only indexing engine for status queries
-            let config = IndexingEngineConfig::new("cli-repo".to_string(), args.base_dir.clone())
-                .with_mode(IndexingMode::ReadOnly);
+            let config = IndexingEngineConfig::new("cli-repo".to_string(), args.base_dir.clone());
 
             let engine = IndexingEngine::new(config.clone()).await?;
             let enhanced_index = engine.get_enhanced_index();

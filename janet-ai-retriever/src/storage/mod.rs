@@ -1,12 +1,52 @@
+//! Storage abstraction layer for janet-ai-retriever
+//!
+//! This module provides trait-based abstractions for storing and retrieving code chunks
+//! and their embeddings. It separates the storage concerns from the retrieval logic,
+//! allowing for different storage backends while maintaining a consistent API.
+//!
+//! ## Key Components
+//!
+//! - **ChunkStore**: Text storage and retrieval operations
+//! - **EmbeddingStore**: Vector similarity search operations
+//! - **CombinedStore**: Unified interface combining both stores
+//! - **Data Types**: Chunk, File, and metadata structures
+//!
+//! ## Architecture
+//!
+//! ```text
+//! ChunkStore ─┐
+//!             ├─ CombinedStore ── SQLiteStore (concrete implementation)
+//! EmbeddingStore ─┘
+//! ```
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::storage::{ChunkStore, Chunk, ChunkFilter};
+//!
+//! # async fn example(store: impl ChunkStore) -> anyhow::Result<()> {
+//! // Store chunks
+//! let chunks = vec![/* ... */];
+//! let ids = store.insert_chunks(chunks).await?;
+//!
+//! // Search by text
+//! let results = store.search_text("function", false).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use anyhow::Result;
 use async_trait::async_trait;
 
 pub mod sqlite_store;
 
+/// Blake3 hash identifying a unique file (32 bytes).
 pub type FileHash = [u8; 32];
+
+/// Database ID for a text chunk.
 pub type ChunkId = i64;
 
-/// Represents a code chunk with metadata
+/// Code chunk with content and metadata. See module docs for usage examples.
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub id: Option<ChunkId>,
@@ -18,7 +58,7 @@ pub struct Chunk {
     pub embedding: Option<Vec<half::f16>>,
 }
 
-/// Represents a file in the index
+/// File metadata for the index. See module docs for details.
 #[derive(Debug, Clone)]
 pub struct File {
     pub hash: FileHash,
@@ -26,7 +66,7 @@ pub struct File {
     pub size: usize,
 }
 
-/// Filter criteria for chunk queries
+/// Query filter for chunk searches. See module docs for usage examples.
 #[derive(Debug, Clone, Default)]
 pub struct ChunkFilter {
     pub file_hash: Option<FileHash>,
@@ -34,7 +74,7 @@ pub struct ChunkFilter {
     pub has_embedding: Option<bool>,
 }
 
-/// Metadata about a chunk (without the full content)
+/// Chunk metadata without content. See module docs for details.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ChunkMetadata {
     pub id: ChunkId,
@@ -45,7 +85,7 @@ pub struct ChunkMetadata {
     pub has_embedding: bool,
 }
 
-/// Trait for storing and retrieving code chunks
+/// Text storage operations for code chunks. See module docs for usage examples.
 #[async_trait]
 pub trait ChunkStore: Send + Sync {
     /// Insert new chunks and return their IDs
@@ -70,7 +110,7 @@ pub trait ChunkStore: Send + Sync {
     async fn search_text(&self, search_term: &str, case_sensitive: bool) -> Result<Vec<Chunk>>;
 }
 
-/// Trait for vector similarity search
+/// Vector similarity search operations. See module docs for details.
 #[async_trait]
 pub trait EmbeddingStore: Send + Sync {
     /// Store embeddings for chunks
@@ -95,7 +135,7 @@ pub trait EmbeddingStore: Send + Sync {
     async fn get_embedding(&self, chunk_id: ChunkId) -> Result<Option<Vec<half::f16>>>;
 }
 
-/// Combined store that implements both chunk storage and embedding search
+/// Unified store combining text and vector operations. See module docs for details.
 #[async_trait]
 pub trait CombinedStore: ChunkStore + EmbeddingStore + Send + Sync {
     /// Search for similar chunks and return full chunk data

@@ -1,3 +1,56 @@
+//! Filesystem monitoring for incremental indexing updates.
+//!
+//! This module provides real-time monitoring of filesystem changes to enable
+//! incremental indexing. It watches for file modifications, creations, and deletions,
+//! debouncing events to avoid excessive processing during rapid changes.
+//!
+//! ## Key Components
+//!
+//! - **DirectoryTracker**: Monitors filesystem changes with debounced event handling
+//! - **Event Processing**: Filters and processes relevant file system events
+//! - **Integration**: Works with IndexingEngine for automatic re-indexing
+//!
+//! ## Features
+//!
+//! ### Debounced Event Handling
+//! - Reduces noise from rapid file modifications (e.g., during compilation)
+//! - Configurable debounce intervals
+//! - Batches related changes for efficient processing
+//!
+//! ### Intelligent Filtering
+//! - Respects .gitignore patterns
+//! - Filters by file types relevant for indexing
+//! - Excludes temporary and system files
+//!
+//! ### Error Resilience
+//! - Graceful handling of filesystem permission errors
+//! - Automatic recovery from watcher failures
+//! - Continues monitoring even if individual events fail
+//!
+//! ## Usage
+//!
+//! Typically used internally by IndexingEngine for filesystem monitoring.
+//!
+//! ```rust,no_run
+//! // DirectoryTracker is used internally by IndexingEngine
+//! // and integrates with the analyzer to process file changes.
+//! // It handles debounced events and filters relevant files automatically.
+//! # use anyhow::Result;
+//! # async fn example() -> Result<()> {
+//! // DirectoryTracker usage is handled by IndexingEngine
+//! // which coordinates file watching, analysis, and indexing
+//! println!("Directory watching is integrated into IndexingEngine");
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Implementation Notes
+//!
+//! - Uses `notify` crate for cross-platform filesystem monitoring
+//! - Debouncing prevents rapid-fire events during file saves
+//! - Event filtering happens before sending to avoid channel overflow
+//! - Monitors both file content changes and directory structure changes
+
 use std::{
     path::{Path, PathBuf},
     time::Duration,
