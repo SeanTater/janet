@@ -107,6 +107,41 @@ pub struct IssuesSummary {
 }
 
 impl StatusApi {
+    /// Get comprehensive status including all available information
+    pub async fn get_comprehensive_status(
+        enhanced_index: &EnhancedFileIndex,
+        indexing_engine: &IndexingEngine,
+        config: &IndexingEngineConfig,
+        base_path: &std::path::Path,
+    ) -> Result<ComprehensiveStatus> {
+        let mut status = ComprehensiveStatus::new();
+
+        // Gather all status information, with graceful error handling
+        status.index_statistics = Self::get_index_statistics(enhanced_index).await.ok();
+        status.indexing_status = Self::get_indexing_status(indexing_engine).await.ok();
+        status.index_health = Self::get_index_health(enhanced_index).await.ok();
+        status.indexing_configuration = Self::get_indexing_config(config).await.ok();
+        
+        // Get embedding model info
+        let models = enhanced_index.get_all_embedding_models().await.ok().unwrap_or_default();
+        status.embedding_model_info = if let Some(first_model) = models.first() {
+            Self::get_embedding_model_info(Some(first_model)).await.ok().flatten()
+        } else {
+            None
+        };
+        
+        status.database_info = Self::get_database_info(enhanced_index, base_path).await.ok();
+        status.dependency_versions = Self::get_dependency_versions().await.ok();
+        status.consistency_report = Self::validate_index_consistency(enhanced_index).await.ok();
+        status.file_system_status = Self::get_file_system_status(config).await.ok();
+        status.search_performance = Self::get_search_performance_stats(enhanced_index).await.ok();
+        status.indexing_performance = Self::get_indexing_performance_stats(indexing_engine).await.ok();
+        status.stale_files = Self::get_stale_files(indexing_engine, config).await.ok();
+        status.network_status = Self::get_network_status().await.ok();
+        status.supported_file_types = Self::get_supported_file_types(config).await.ok();
+
+        Ok(status)
+    }
     /// Get comprehensive index statistics
     pub async fn get_index_statistics(
         enhanced_index: &EnhancedFileIndex,
