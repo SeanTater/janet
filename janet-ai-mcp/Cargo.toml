@@ -8,6 +8,9 @@ publish = false
 name = "janet-ai-mcp"
 path = "src/main.rs"
 
+[features]
+expensive_tests = []
+
 [dependencies]
 anyhow = "1.0.97"
 async-trait = "0.1.88"

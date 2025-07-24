@@ -197,3 +197,213 @@ fn matches_any_glob(path: &Path, compiled_globs: &[glob::Pattern]) -> bool {
 
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile;
+
+    #[tokio::test]
+    async fn test_regex_search_basic_pattern() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+
+        // Create a simple test file
+        let test_file = temp_dir.path().join("test.rs");
+        std::fs::write(&test_file, "pub fn add(a: i32, b: i32) -> i32 { a + b }")
+            .expect("Failed to write test file");
+
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Search for function definitions
+        let request = RegexSearchRequest {
+            pattern: r"pub fn \w+".to_string(),
+            globs: None,
+            include_deps: None,
+            include_docs: None,
+        };
+
+        let result = regex_search(&config, request).await;
+        assert!(result.is_ok(), "Regex search should succeed: {result:?}");
+
+        let output = result.unwrap();
+
+        // Should find function definitions in test file
+        assert!(
+            output.contains("pub fn"),
+            "Should find function definitions"
+        );
+        assert!(output.contains("add"), "Should find the add function");
+        assert!(
+            output.contains("Files Searched:"),
+            "Should show search stats"
+        );
+        assert!(output.contains("Found"), "Should show result count");
+    }
+
+    #[tokio::test]
+    async fn test_regex_search_with_rust_glob() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+
+        // Create test files
+        let rust_file = temp_dir.path().join("test.rs");
+        std::fs::write(&rust_file, "fn test() {}").expect("Failed to write rust file");
+
+        let text_file = temp_dir.path().join("test.txt");
+        std::fs::write(&text_file, "fn should_not_match").expect("Failed to write text file");
+
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Search only in Rust files
+        let request = RegexSearchRequest {
+            pattern: "fn".to_string(),
+            globs: Some(vec!["*.rs".to_string()]),
+            include_deps: None,
+            include_docs: None,
+        };
+
+        let result = regex_search(&config, request).await;
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert!(output.contains("Glob Filters: Some([\"*.rs\"])"));
+        assert!(
+            output.contains("fn"),
+            "Should find function keywords in Rust files"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_regex_search_no_matches() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+
+        // Create a test file
+        let test_file = temp_dir.path().join("test.rs");
+        std::fs::write(&test_file, "fn test() {}").expect("Failed to write test file");
+
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Search for something that doesn't exist
+        let request = RegexSearchRequest {
+            pattern: "ThisPatternDoesNotExistAnywhere".to_string(),
+            globs: None,
+            include_deps: None,
+            include_docs: None,
+        };
+
+        let result = regex_search(&config, request).await;
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert!(
+            output.contains("No matches found"),
+            "Should report no matches"
+        );
+        assert!(
+            output.contains("Files Searched:"),
+            "Should still show files searched"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_regex_search_invalid_pattern() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Use an invalid regex pattern
+        let request = RegexSearchRequest {
+            pattern: "[invalid".to_string(), // Missing closing bracket
+            globs: None,
+            include_deps: None,
+            include_docs: None,
+        };
+
+        let result = regex_search(&config, request).await;
+        assert!(result.is_err(), "Invalid regex should return error");
+
+        let error = result.unwrap_err();
+        assert!(
+            error.contains("Invalid regex pattern"),
+            "Should report regex error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_regex_search_invalid_glob() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Use an invalid glob pattern
+        let request = RegexSearchRequest {
+            pattern: "fn".to_string(),
+            globs: Some(vec!["[invalid".to_string()]), // Invalid glob pattern
+            include_deps: None,
+            include_docs: None,
+        };
+
+        let result = regex_search(&config, request).await;
+        assert!(result.is_err(), "Invalid glob should return error");
+
+        let error = result.unwrap_err();
+        assert!(
+            error.contains("Invalid glob pattern"),
+            "Should report glob error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_regex_search_specific_file_pattern() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+
+        // Create a math.rs file with mathematical operations
+        let math_file = temp_dir.path().join("math.rs");
+        std::fs::write(&math_file, "fn add(a: i32, b: i32) -> i32 { a + b }")
+            .expect("Failed to write math file");
+
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Search for mathematical operations specifically
+        let request = RegexSearchRequest {
+            pattern: r"a \+ b".to_string(),
+            globs: Some(vec!["*.rs".to_string()]),
+            include_deps: None,
+            include_docs: None,
+        };
+
+        let result = regex_search(&config, request).await;
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert!(
+            output.contains("a + b"),
+            "Should find the mathematical operation"
+        );
+    }
+
+    #[test]
+    fn test_matches_any_glob() {
+        let patterns = vec![
+            glob::Pattern::new("*.rs").unwrap(),
+            glob::Pattern::new("*.js").unwrap(),
+        ];
+
+        let rust_path = std::path::Path::new("src/main.rs");
+        let js_path = std::path::Path::new("src/app.js");
+        let py_path = std::path::Path::new("src/script.py");
+
+        assert!(matches_any_glob(rust_path, &patterns));
+        assert!(matches_any_glob(js_path, &patterns));
+        assert!(!matches_any_glob(py_path, &patterns));
+    }
+}

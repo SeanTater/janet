@@ -15,9 +15,9 @@ use tracing::info;
 
 /// Configuration for the Janet MCP server
 #[derive(Debug, Clone)]
-struct ServerConfig {
+pub struct ServerConfig {
     /// Root directory to search for files
-    root_dir: PathBuf,
+    pub root_dir: PathBuf,
 }
 
 impl ServerConfig {
@@ -39,21 +39,13 @@ pub async fn run_server(root_dir: Option<PathBuf>) -> Result<()> {
         None => ServerConfig::default(),
     };
     info!("Starting Janet MCP server");
-    eprintln!(
-        "DEBUG: Starting Janet MCP server with root: {:?}",
-        config.root_dir
-    );
 
     // Create the MCP server instance and serve with stdio
     let janet_server = JanetMcpServer::new(config).await?;
 
     info!("Janet MCP server initialized, starting stdio transport");
-    eprintln!("DEBUG: Janet MCP server initialized, starting stdio transport");
 
     // Serve with stdio transport using rmcp's ServerHandler
-    eprintln!("DEBUG: About to call serve_stdio");
     janet_server.serve_stdio().await?;
-
-    eprintln!("DEBUG: serve_stdio completed");
     Ok(())
 }

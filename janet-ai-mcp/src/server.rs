@@ -803,16 +803,10 @@ impl JanetMcpServer {
     /// Serve the MCP server using stdio transport
     pub async fn serve_stdio(&self) -> Result<()> {
         info!("Starting MCP server with stdio transport");
-        eprintln!("DEBUG: serve_stdio called");
 
         let transport = (stdin(), stdout());
-        eprintln!("DEBUG: Created stdio transport");
-
         let server = self.clone().serve(transport).await?;
-        eprintln!("DEBUG: Server.serve() completed, waiting for connections");
-
         let quit_reason = server.waiting().await?;
-        eprintln!("DEBUG: Server quit with reason: {quit_reason:?}");
 
         info!("MCP server quit: {:?}", quit_reason);
         Ok(())
@@ -825,5 +819,167 @@ impl ServerHandler for JanetMcpServer {
             instructions: Some("Janet AI MCP Server - provides regex and semantic search capabilities across codebases".into()),
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_server_creation() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        let server = JanetMcpServer::new(config).await;
+        assert!(server.is_ok(), "Server creation should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_status_without_index() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        let server = JanetMcpServer::new(config)
+            .await
+            .expect("Server creation should succeed");
+        let status_output = server.status().await;
+
+        // Should show basic status since no .janet-ai.db exists
+        assert!(status_output.contains("Janet AI MCP Server Status"));
+        assert!(status_output.contains("Server Version:"));
+        assert!(status_output.contains("Root Directory:"));
+        assert!(status_output.contains("Working Directory:"));
+        assert!(
+            status_output
+                .contains("⚠ Limited status available - retriever components not initialized")
+        );
+
+        // Should include basic status sections
+        assert!(status_output.contains("Index Infrastructure"));
+        assert!(status_output.contains("Search Capabilities"));
+        assert!(status_output.contains("System Resources"));
+        assert!(status_output.contains("Troubleshooting"));
+    }
+
+    #[test]
+    fn test_basic_status_sections() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Create a mock server (without async initialization) for testing basic status
+        let server = JanetMcpServer {
+            config: config.clone(),
+            enhanced_index: None,
+            indexing_engine: None,
+            indexing_config: None,
+        };
+
+        // Test individual status sections
+        let index_status = server.get_index_status();
+        assert!(index_status.contains("Index Infrastructure"));
+        assert!(index_status.contains("Index Database:"));
+        assert!(index_status.contains("✗ Missing")); // No database should exist
+
+        let search_status = server.get_search_status();
+        assert!(search_status.contains("Search Capabilities"));
+        assert!(search_status.contains("Regex Search: ✓ Always available"));
+        assert!(search_status.contains("Semantic Search:"));
+        assert!(search_status.contains("⚠ Requires indexing")); // No database exists
+
+        let system_status = server.get_system_status();
+        assert!(system_status.contains("System Resources"));
+        assert!(system_status.contains("Root Directory Access:"));
+        assert!(system_status.contains("Platform:"));
+
+        let troubleshooting_info = server.get_troubleshooting_info();
+        assert!(troubleshooting_info.contains("Troubleshooting"));
+        assert!(troubleshooting_info.contains("⚠ No index found"));
+        assert!(troubleshooting_info.contains("Common Issues:"));
+    }
+
+    #[tokio::test]
+    async fn test_status_with_existing_database_file() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+
+        // Create an empty .janet-ai.db file to simulate existing database
+        let db_path = temp_dir.path().join(".janet-ai.db");
+        std::fs::write(&db_path, b"fake database content").expect("Failed to create fake database");
+
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        let server = JanetMcpServer::new(config)
+            .await
+            .expect("Server creation should succeed");
+        let status_output = server.status().await;
+
+        // Should attempt to use comprehensive status since database file exists,
+        // but fall back to basic status due to initialization failure
+        assert!(status_output.contains("Janet AI MCP Server Status"));
+
+        // Could contain either comprehensive status (if initialization succeeds)
+        // or limited status with basic sections (if initialization fails)
+        assert!(
+            status_output.contains("⚠ Limited status available")
+                || status_output.contains("Index Statistics")
+                || status_output.contains("Index Infrastructure")
+        );
+    }
+
+    #[test]
+    fn test_server_clone() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        let server = JanetMcpServer {
+            config: config.clone(),
+            enhanced_index: None,
+            indexing_engine: None,
+            indexing_config: Some(
+                janet_ai_retriever::retrieval::indexing_engine::IndexingEngineConfig::new(
+                    "test".to_string(),
+                    temp_dir.path().to_path_buf(),
+                ),
+            ),
+        };
+
+        let cloned_server = server.clone();
+
+        // Should clone config and indexing_config but not the components
+        assert_eq!(cloned_server.config.root_dir, server.config.root_dir);
+        assert!(cloned_server.enhanced_index.is_none());
+        assert!(cloned_server.indexing_engine.is_none());
+        assert!(cloned_server.indexing_config.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_initialize_retriever_components_creates_database() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        let db_path = temp_dir.path().join(".janet-ai.db");
+        assert!(!db_path.exists(), "Database should not exist initially");
+
+        // Should succeed and create database
+        let result = JanetMcpServer::initialize_retriever_components(&config).await;
+        assert!(
+            result.is_ok(),
+            "Should succeed and create database if missing"
+        );
+
+        // Database should now exist
+        assert!(db_path.exists(), "Database should be created");
     }
 }

@@ -36,6 +36,12 @@ cobertura.xml
 audit-results.json
 licenses.json
 
+# SQLite databases and temporary files
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
 # Documentation build
 /docs/_build/
 

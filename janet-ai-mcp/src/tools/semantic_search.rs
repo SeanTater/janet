@@ -100,7 +100,7 @@ async fn perform_semantic_search(
     use half::f16;
 
     // Try to load existing index from the root directory
-    let index_db_path = config.root_dir.join(".janet.db");
+    let index_db_path = config.root_dir.join(".janet-ai.db");
 
     if !index_db_path.exists() {
         return Err(anyhow::anyhow!(
@@ -170,4 +170,101 @@ async fn create_embedding_provider() -> AnyhowResult<FastEmbedProvider> {
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create provider: {}", e))?;
     Ok(provider)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile;
+
+    #[tokio::test]
+    async fn test_semantic_search_no_index() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Test semantic search when no index database exists
+        let request = SemanticSearchRequest {
+            query: "function that adds two numbers".to_string(),
+            limit: Some(5),
+            threshold: Some(0.5),
+        };
+
+        let result = semantic_search(&config, request).await;
+        assert!(result.is_err(), "Should fail when no index exists");
+
+        let error = result.unwrap_err();
+        assert!(
+            error.contains("No index database found"),
+            "Should mention missing index: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_semantic_search_request_defaults() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Test that request with no limit/threshold uses defaults
+        let request = SemanticSearchRequest {
+            query: "test query".to_string(),
+            limit: None,
+            threshold: None,
+        };
+
+        let result = semantic_search(&config, request).await;
+        // Should fail because no index exists, but we can check the error message
+        // contains information about the search parameters
+        assert!(result.is_err());
+        // The error should be about missing index, not about invalid parameters
+        let error = result.unwrap_err();
+        assert!(error.contains("No index database found"));
+    }
+
+    #[tokio::test]
+    async fn test_semantic_search_request_validation() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Test with various limit and threshold values
+        let request = SemanticSearchRequest {
+            query: "test query".to_string(),
+            limit: Some(0),       // Edge case: zero limit
+            threshold: Some(1.5), // Edge case: threshold > 1.0
+        };
+
+        let result = semantic_search(&config, request).await;
+        assert!(result.is_err());
+        // Should fail due to missing index, not parameter validation
+        let error = result.unwrap_err();
+        assert!(error.contains("No index database found"));
+    }
+
+    #[test]
+    fn test_semantic_search_request_structure() {
+        // Test that the request structure can be created and has expected defaults
+        let request = SemanticSearchRequest {
+            query: "test".to_string(),
+            limit: None,
+            threshold: None,
+        };
+
+        assert_eq!(request.query, "test");
+        assert!(request.limit.is_none());
+        assert!(request.threshold.is_none());
+
+        let request2 = SemanticSearchRequest {
+            query: "another test".to_string(),
+            limit: Some(20),
+            threshold: Some(0.8),
+        };
+
+        assert_eq!(request2.limit, Some(20));
+        assert_eq!(request2.threshold, Some(0.8));
+    }
 }
