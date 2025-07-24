@@ -79,6 +79,23 @@ use anyhow::Result;
 use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider, TokenizerConfig};
 use std::path::{Path, PathBuf};
 
+/// Configuration for the BERT-based chunk analyzer.
+///
+/// This struct defines how files should be analyzed and chunked for indexing,
+/// including embedding model settings and chunking parameters.
+///
+/// # Examples
+/// ```
+/// use janet_ai_retriever::retrieval::analyzer::BertChunkConfig;
+///
+/// let config = BertChunkConfig {
+///     model_base_path: Some("models".to_string()),
+///     model_name: Some("snowflake-arctic-embed-xs".to_string()),
+///     chunk_size_lines: 100,
+///     chunk_step_lines: 50,
+///     generate_embeddings: true,
+/// };
+/// ```
 #[derive(Debug, serde::Deserialize)]
 pub struct BertChunkConfig {
     /// Base path for embedding models (e.g., "models/")
@@ -124,6 +141,7 @@ impl FileAnalyzer {
     }
 
     /// Initialize the embedding provider if embeddings are enabled
+    /// Initializes embedding provider if embeddings are enabled. See module docs for details.
     pub async fn initialize_embeddings(&mut self) -> Result<()> {
         if !self.config.generate_embeddings {
             tracing::info!("Embeddings disabled in configuration");
@@ -159,7 +177,7 @@ impl FileAnalyzer {
         Ok(())
     }
 
-    /// Create and initialize a new analyzer with embeddings
+    /// Creates and initializes analyzer with embeddings in one step. See module docs for usage patterns.
     pub async fn create_with_embeddings(
         file_index: FileIndex,
         config: BertChunkConfig,
@@ -169,6 +187,7 @@ impl FileAnalyzer {
         Ok(analyzer)
     }
 
+    /// Processes file by chunking and generating embeddings. See module docs for pipeline details.
     pub async fn chunk_file(&self, relative_path: &Path) -> Result<Option<Vec<ChunkRef>>> {
         // Naive implementation of chunking
         let loc = &self.file_index.base.join(relative_path);

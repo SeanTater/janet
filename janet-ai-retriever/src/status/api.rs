@@ -1,3 +1,39 @@
+//! Status API implementation for janet-ai-retriever
+//!
+//! This module provides the concrete implementation of the status reporting system,
+//! collecting diagnostic information from all subsystems and generating comprehensive
+//! status reports. It serves as the main entry point for system health monitoring.
+//!
+//! ## Key Components
+//!
+//! - **StatusApi**: Main implementation struct with status collection methods
+//! - **Comprehensive Reporting**: Aggregates data from all subsystems into unified reports
+//! - **Graceful Error Handling**: Continues reporting even when individual subsystems fail
+//! - **Database Integration**: Direct SQLite queries for consistency and integrity checks
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::status::api::StatusApi;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! // StatusApi is typically used by higher-level systems like MCP servers
+//! // let enhanced_index = /* ... */;
+//! // let indexing_engine = /* ... */;
+//! // let config = /* ... */;
+//! // let base_path = /* ... */;
+//!
+//! // Generate comprehensive status report
+//! // let status = StatusApi::get_comprehensive_status(
+//! //     &enhanced_index,
+//! //     &indexing_engine,
+//! //     &config,
+//! //     &base_path,
+//! // ).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -9,7 +45,7 @@ use crate::retrieval::{
 
 use super::{database::*, types::*};
 
-/// Main status API implementation
+/// Status API implementation with diagnostic collection methods. See module docs for usage.
 pub struct StatusApi;
 
 // Consolidated types previously in separate modules
@@ -107,7 +143,7 @@ pub struct IssuesSummary {
 }
 
 impl StatusApi {
-    /// Get comprehensive status including all available information
+    /// Generates comprehensive status report from all subsystems. See module docs for usage examples.
     pub async fn get_comprehensive_status(
         enhanced_index: &EnhancedFileIndex,
         indexing_engine: &IndexingEngine,

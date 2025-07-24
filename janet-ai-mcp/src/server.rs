@@ -23,7 +23,24 @@ use rmcp::{
 use tokio::io::{stdin, stdout};
 use tracing::info;
 
-/// Janet MCP Server that provides search capabilities across codebases
+/// Janet MCP Server that provides search capabilities across codebases.
+///
+/// This server implements the Model Context Protocol (MCP) to provide AI tools
+/// with advanced search capabilities over indexed codebases. It combines:
+/// - **Regex search**: Fast pattern-based text search with context
+/// - **Semantic search**: AI-powered similarity search using embeddings
+/// - **Status reporting**: Comprehensive system health and configuration info
+///
+/// The server requires a pre-built index database created by janet-ai-retriever.
+/// It communicates with MCP clients (like Claude Desktop) over stdio using
+/// the standard MCP protocol.
+///
+/// # Architecture
+/// ```text
+/// MCP Client (Claude) ↔ stdio ↔ JanetMcpServer ↔ IndexingEngine ↔ SQLite DB
+///                                        ↓
+///                                 EnhancedFileIndex
+/// ```
 #[derive(Debug)]
 pub struct JanetMcpServer {
     config: ServerConfig,
@@ -34,8 +51,35 @@ pub struct JanetMcpServer {
 
 #[rmcp::tool_router]
 impl JanetMcpServer {
-    /// Create a new Janet MCP server with the given configuration
-    /// Requires an existing index database - will fail if not found
+    /// Create a new Janet MCP server with the given configuration.
+    ///
+    /// This initializes the server with all necessary components for providing
+    /// search capabilities. The server requires an existing `.janet-ai.db` index
+    /// file in the root directory - use janet-ai-retriever to create this first.
+    ///
+    /// # Arguments
+    /// * `config` - Server configuration specifying the root directory
+    ///
+    /// # Returns
+    /// A new JanetMcpServer instance ready to serve MCP requests
+    ///
+    /// # Errors
+    /// - If the `.janet-ai.db` index file is not found in the root directory
+    /// - Database connection or initialization errors
+    /// - IndexingEngine initialization errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_mcp::{JanetMcpServer, ServerConfig};
+    /// use std::path::PathBuf;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let config = ServerConfig::new(PathBuf::from("."));
+    /// let server = JanetMcpServer::new(config).await?;
+    /// // Server is ready to handle MCP requests
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn new(config: ServerConfig) -> Result<Self> {
         info!(
             "Initializing Janet MCP server with root: {:?}",
@@ -131,6 +175,37 @@ impl JanetMcpServer {
     }
 
     /// Serve the MCP server using stdio transport
+    /// Start serving MCP requests over stdio transport.
+    ///
+    /// This method starts the MCP server and begins listening for requests over
+    /// standard input/output. This is the standard transport mechanism for MCP
+    /// servers when integrated with clients like Claude Desktop.
+    ///
+    /// The server will continue running until it receives a shutdown signal or
+    /// encounters an error. All MCP protocol messages are handled automatically.
+    ///
+    /// # Returns
+    /// `Ok(())` when the server shuts down gracefully
+    ///
+    /// # Errors
+    /// - MCP protocol communication errors
+    /// - Stdin/stdout transport errors
+    /// - Tool execution errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_mcp::{JanetMcpServer, ServerConfig};
+    /// use std::path::PathBuf;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let config = ServerConfig::new(PathBuf::from("."));
+    /// let server = JanetMcpServer::new(config).await?;
+    ///
+    /// // Start serving - this will block until shutdown
+    /// server.serve_stdio().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn serve_stdio(self) -> Result<()> {
         info!("Starting MCP server with stdio transport");
 

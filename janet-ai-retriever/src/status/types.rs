@@ -1,10 +1,38 @@
+//! Core status types and comprehensive reporting structures for janet-ai-retriever
+//!
+//! This module provides the main data structures for comprehensive system status reporting,
+//! including index statistics, indexing progress, health checks, and configuration details.
+//! It serves as the central type system for the status API.
+//!
+//! ## Key Components
+//!
+//! - **ComprehensiveStatus**: Main status report aggregating all subsystem information
+//! - **IndexStatistics**: Statistics about files, chunks, and embeddings in the index
+//! - **IndexingStatus**: Real-time indexing operation progress and queue status
+//! - **IndexHealth**: System health checks including database connectivity and resources
+//! - **IndexingConfiguration**: Current indexing settings and parameters
+//! - **EmbeddingModelInfo**: Embedding model details and download status
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use janet_ai_retriever::status::types::{ComprehensiveStatus, HealthStatus};
+//!
+//! // Create new status report
+//! let mut status = ComprehensiveStatus::new();
+//!
+//! // Serialize to TOML for display
+//! let toml_output = status.to_toml().unwrap();
+//! println!("Status:\n{}", toml_output);
+//! ```
+
 use super::{
     DatabaseInfo, DependencyVersions, FileSystemStatus, IndexConsistencyReport,
     IndexingPerformanceStats, NetworkStatus, SearchPerformanceStats, StaleFilesInfo,
 };
 use serde::{Deserialize, Serialize};
 
-/// Complete status information for the janet-ai system
+/// Comprehensive system status aggregating all subsystem reports. See module docs for usage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComprehensiveStatus {
     /// Index statistics (files, chunks, embeddings)
@@ -38,7 +66,7 @@ pub struct ComprehensiveStatus {
 }
 
 impl ComprehensiveStatus {
-    /// Create a new empty status structure
+    /// Creates a new empty status report. See module docs for usage examples.
     pub fn new() -> Self {
         Self {
             index_statistics: None,
@@ -58,7 +86,7 @@ impl ComprehensiveStatus {
         }
     }
 
-    /// Serialize to TOML string
+    /// Serializes status report to TOML format. See module docs for details.
     pub fn to_toml(&self) -> Result<String, toml::ser::Error> {
         toml::to_string_pretty(self)
     }
@@ -70,7 +98,7 @@ impl Default for ComprehensiveStatus {
     }
 }
 
-/// Comprehensive index statistics
+/// Index statistics and metadata. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexStatistics {
     /// Total files indexed
@@ -89,7 +117,7 @@ pub struct IndexStatistics {
     pub models_count: usize,
 }
 
-/// Current indexing operation status
+/// Real-time indexing progress and queue status. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexingStatus {
     /// Is indexing currently running?
@@ -112,7 +140,7 @@ pub struct IndexingStatus {
     pub embeddings_generated: usize,
 }
 
-/// Index health check information
+/// System health checks and resource status. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexHealth {
     /// Database connectivity status
@@ -131,6 +159,7 @@ pub struct IndexHealth {
     pub overall_status: HealthStatus,
 }
 
+/// Health status levels for system diagnostics. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HealthStatus {
     Healthy,
@@ -138,7 +167,7 @@ pub enum HealthStatus {
     Critical,
 }
 
-/// Current indexing configuration
+/// Indexing settings and parameters. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexingConfiguration {
     /// Chunk size settings
@@ -161,7 +190,7 @@ pub struct IndexingConfiguration {
     pub base_path: String,
 }
 
-/// Embedding model information
+/// Embedding model details and status. See module docs for usage examples.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingModelInfo {
     /// Model name and version
@@ -176,6 +205,7 @@ pub struct EmbeddingModelInfo {
     pub normalized: bool,
 }
 
+/// Model download status tracking. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ModelDownloadStatus {
     NotDownloaded,

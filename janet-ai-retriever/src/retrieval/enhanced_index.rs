@@ -212,7 +212,37 @@ pub struct EnhancedFileIndex {
 }
 
 impl EnhancedFileIndex {
-    /// Create a new enhanced file index
+    /// Create a new enhanced file index with persistent storage.
+    ///
+    /// This creates an enhanced file index that includes metadata tracking and
+    /// embedding model compatibility features. The index uses a `.janet-ai.db`
+    /// SQLite database file in the specified directory.
+    ///
+    /// If the database already exists, it will be opened and any missing tables
+    /// will be created automatically.
+    ///
+    /// # Arguments
+    /// * `base` - Directory where the `.janet-ai.db` file will be created
+    ///
+    /// # Returns
+    /// A new EnhancedFileIndex ready for use
+    ///
+    /// # Errors
+    /// - Database connection or creation errors
+    /// - File system permission errors
+    /// - SQL schema creation errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// use std::path::Path;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    /// // Index is ready for metadata operations and file indexing
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn open(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open(base).await?;
         let pool = file_index.pool().clone();
@@ -228,7 +258,33 @@ impl EnhancedFileIndex {
         Ok(enhanced)
     }
 
-    /// Create a new enhanced file index using in-memory database (for testing)
+    /// Create a new enhanced file index using an in-memory database.
+    ///
+    /// This creates an enhanced file index that exists only in memory and will be
+    /// lost when dropped. This is primarily intended for testing and development
+    /// scenarios where persistence is not needed.
+    ///
+    /// # Arguments
+    /// * `base` - Base path used for relative path calculations (not for storage)
+    ///
+    /// # Returns
+    /// A new EnhancedFileIndex using in-memory storage
+    ///
+    /// # Errors
+    /// - Database connection or creation errors
+    /// - SQL schema creation errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// use std::path::Path;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open_memory(Path::new(".")).await?;
+    /// // Index exists in memory only - data will be lost on drop
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn open_memory(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open_memory(base).await?;
         let pool = file_index.pool().clone();
@@ -304,11 +360,61 @@ impl EnhancedFileIndex {
     }
 
     /// Get the underlying FileIndex for compatibility
+    /// Get a reference to the underlying FileIndex.
+    ///
+    /// This provides access to the low-level file indexing operations
+    /// for cases where you need direct access to the base functionality.
+    ///
+    /// # Returns
+    /// Reference to the underlying FileIndex
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let enhanced_index = EnhancedFileIndex::open(Path::new(".")).await?;
+    /// let file_index = enhanced_index.file_index();
+    ///
+    /// // Use file_index for basic operations
+    /// let files = file_index.get_all_files().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn file_index(&self) -> &FileIndex {
         &self.file_index
     }
 
-    /// Initialize or update index metadata
+    /// Initialize or update index metadata for a repository.
+    ///
+    /// This stores or updates metadata about the index including system versions,
+    /// repository information, and any custom metadata. If metadata for the
+    /// repository already exists, it will be updated with the new values.
+    ///
+    /// # Arguments
+    /// * `metadata` - Index metadata to store or update
+    ///
+    /// # Returns
+    /// `Ok(())` if the metadata was successfully stored
+    ///
+    /// # Errors
+    /// - JSON serialization errors for metadata
+    /// - Database query errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, IndexMetadata};
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// let metadata = IndexMetadata::new("my-project".to_string())
+    ///     .with_metadata("version".to_string(), "1.0.0".to_string());
+    ///
+    /// index.upsert_index_metadata(&metadata).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn upsert_index_metadata(&self, metadata: &IndexMetadata) -> Result<()> {
         let metadata_json = serde_json::to_string(&metadata.metadata)?;
 
@@ -334,7 +440,36 @@ impl EnhancedFileIndex {
         Ok(())
     }
 
-    /// Get index metadata for a repository
+    /// Get index metadata for a specific repository.
+    ///
+    /// Retrieves stored metadata about the index including system versions,
+    /// timestamps, and any custom metadata that was stored.
+    ///
+    /// # Arguments
+    /// * `repository` - Repository name to look up metadata for
+    ///
+    /// # Returns
+    /// - `Some(IndexMetadata)` if metadata exists for the repository
+    /// - `None` if no metadata is found
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - JSON deserialization errors for stored metadata
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// if let Some(metadata) = index.get_index_metadata("my-project").await? {
+    ///     println!("Index created at: {}", metadata.created_at);
+    ///     println!("Last updated: {}", metadata.updated_at);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_index_metadata(&self, repository: &str) -> Result<Option<IndexMetadata>> {
         let row = sqlx::query("SELECT * FROM index_metadata WHERE repository = ?1")
             .bind(repository)
@@ -359,7 +494,41 @@ impl EnhancedFileIndex {
         }
     }
 
-    /// Register an embedding model
+    /// Register an embedding model for use with the index.
+    ///
+    /// This stores metadata about an embedding model including its provider,
+    /// dimensions, normalization settings, and configuration. Models must be
+    /// registered before chunks can be associated with them.
+    ///
+    /// If a model with the same ID already exists, it will be updated.
+    ///
+    /// # Arguments
+    /// * `model` - Embedding model metadata to register
+    ///
+    /// # Returns
+    /// `Ok(())` if the model was successfully registered
+    ///
+    /// # Errors
+    /// - JSON serialization errors for model configuration
+    /// - Database query errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, EmbeddingModelMetadata};
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// let model = EmbeddingModelMetadata::new(
+    ///     "sentence-transformers/all-MiniLM-L6-v2".to_string(),
+    ///     "fastembed".to_string(),
+    ///     384
+    /// ).with_normalized(true);
+    ///
+    /// index.register_embedding_model(&model).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn register_embedding_model(&self, model: &EmbeddingModelMetadata) -> Result<()> {
         let config_json = serde_json::to_string(&model.config)?;
 
@@ -390,7 +559,36 @@ impl EnhancedFileIndex {
         Ok(())
     }
 
-    /// Get embedding model metadata by ID
+    /// Get embedding model metadata by its unique ID.
+    ///
+    /// Retrieves stored metadata about a specific embedding model including
+    /// its configuration, dimensions, and normalization settings.
+    ///
+    /// # Arguments
+    /// * `model_id` - Unique identifier for the embedding model
+    ///
+    /// # Returns
+    /// - `Some(EmbeddingModelMetadata)` if the model exists
+    /// - `None` if no model with the given ID is found
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - JSON deserialization errors for model configuration
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// let model_id = "fastembed:sentence-transformers/all-MiniLM-L6-v2:latest:384:norm";
+    /// if let Some(model) = index.get_embedding_model(model_id).await? {
+    ///     println!("Model: {} ({}D)", model.model_name, model.dimension);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_embedding_model(
         &self,
         model_id: &str,
@@ -418,7 +616,33 @@ impl EnhancedFileIndex {
         }
     }
 
-    /// Get all registered embedding models
+    /// Get all registered embedding models.
+    ///
+    /// Retrieves metadata for all embedding models that have been registered
+    /// with the index, ordered by creation time (most recent first).
+    ///
+    /// # Returns
+    /// Vector of all registered embedding model metadata
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - JSON deserialization errors for model configurations
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// let models = index.get_all_embedding_models().await?;
+    /// for model in models {
+    ///     println!("Model: {} ({}D, normalized: {})",
+    ///              model.model_name, model.dimension, model.normalized);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_all_embedding_models(&self) -> Result<Vec<EmbeddingModelMetadata>> {
         let rows = sqlx::query("SELECT * FROM embedding_models ORDER BY created_at DESC")
             .fetch_all(&self.pool)
@@ -443,7 +667,39 @@ impl EnhancedFileIndex {
         Ok(models)
     }
 
-    /// Insert chunks with model metadata
+    /// Insert or update chunks with associated embedding model metadata.
+    ///
+    /// This stores text chunks along with their embeddings and associates them
+    /// with a specific embedding model. The model must be registered with
+    /// [`register_embedding_model`](Self::register_embedding_model) before calling this method.
+    ///
+    /// If chunks already exist (based on file_hash, line_start, line_end), they will be updated.
+    ///
+    /// # Arguments
+    /// * `chunks` - Array of chunk references to store
+    /// * `model_id` - ID of the embedding model used to generate the embeddings
+    ///
+    /// # Returns
+    /// `Ok(())` if chunks were successfully stored
+    ///
+    /// # Errors
+    /// - Database transaction errors
+    /// - Foreign key constraint errors if model_id doesn't exist
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use janet_ai_retriever::retrieval::file_index::ChunkRef;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    /// let model_id = "fastembed:sentence-transformers/all-MiniLM-L6-v2:latest:384:norm";
+    ///
+    /// let chunks: Vec<ChunkRef> = vec![/* chunks with embeddings */];
+    /// index.upsert_chunks_with_model(&chunks, model_id).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn upsert_chunks_with_model(
         &self,
         chunks: &[ChunkRef],
@@ -484,6 +740,33 @@ impl EnhancedFileIndex {
     }
 
     /// Get chunks by model ID
+    /// Get all chunks associated with a specific embedding model.
+    ///
+    /// Retrieves all stored chunks that were generated using the specified
+    /// embedding model, including their content and embeddings.
+    ///
+    /// # Arguments
+    /// * `model_id` - ID of the embedding model to filter by
+    ///
+    /// # Returns
+    /// Vector of chunk references associated with the model
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    /// let model_id = "fastembed:sentence-transformers/all-MiniLM-L6-v2:latest:384:norm";
+    ///
+    /// let chunks = index.get_chunks_by_model(model_id).await?;
+    /// println!("Found {} chunks for model {}", chunks.len(), model_id);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_chunks_by_model(&self, model_id: &str) -> Result<Vec<ChunkRef>> {
         let rows = sqlx::query(
             "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
@@ -523,7 +806,40 @@ impl EnhancedFileIndex {
         Ok(chunks)
     }
 
-    /// Check for embedding model compatibility
+    /// Check if a new embedding model is compatible with existing data.
+    ///
+    /// This checks whether the provided model is compatible with embeddings already
+    /// stored in the index. Models are considered compatible if they have the same
+    /// dimensions and normalization settings.
+    ///
+    /// # Arguments
+    /// * `current_model` - Model metadata to check for compatibility
+    ///
+    /// # Returns
+    /// `true` if the model is compatible with existing embeddings, `false` otherwise
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, EmbeddingModelMetadata};
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// let new_model = EmbeddingModelMetadata::new(
+    ///     "different-model".to_string(),
+    ///     "fastembed".to_string(),
+    ///     384
+    /// );
+    ///
+    /// if !index.check_model_compatibility(&new_model).await? {
+    ///     println!("Model incompatible - will need to re-embed existing data");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn check_model_compatibility(
         &self,
         current_model: &EmbeddingModelMetadata,
@@ -539,6 +855,33 @@ impl EnhancedFileIndex {
     }
 
     /// Delete chunks by model ID (useful when changing embedding models)
+    /// Delete all chunks associated with a specific embedding model.
+    ///
+    /// This removes all chunks that were generated using the specified embedding model.
+    /// Useful when switching to a new embedding model or cleaning up old data.
+    ///
+    /// # Arguments
+    /// * `model_id` - ID of the embedding model whose chunks should be deleted
+    ///
+    /// # Returns
+    /// Number of chunks that were deleted
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    /// let old_model_id = "fastembed:old-model:latest:256:norm";
+    ///
+    /// let deleted_count = index.delete_chunks_by_model(old_model_id).await?;
+    /// println!("Deleted {} chunks from old model", deleted_count);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn delete_chunks_by_model(&self, model_id: &str) -> Result<usize> {
         let result = sqlx::query("DELETE FROM chunks WHERE model_id = ?1")
             .bind(model_id)
@@ -547,7 +890,40 @@ impl EnhancedFileIndex {
         Ok(result.rows_affected() as usize)
     }
 
-    /// Search for similar chunks using embedding similarity
+    /// Search for similar chunks using embedding similarity.
+    ///
+    /// This performs a semantic similarity search by comparing the query embedding
+    /// against all stored chunk embeddings using cosine similarity. Results are
+    /// ranked by similarity score (highest first).
+    ///
+    /// # Arguments
+    /// * `query_embedding` - Query vector to search for similar chunks
+    /// * `limit` - Maximum number of results to return
+    ///
+    /// # Returns
+    /// Vector of chunk references ordered by similarity (most similar first)
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - Embedding deserialization errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// // Create a query embedding (normally from your embedding model)
+    /// let query_embedding: Vec<half::f16> = vec![half::f16::from_f32(0.1); 384];
+    ///
+    /// let similar_chunks = index.search_similar_chunks(&query_embedding, 10).await?;
+    /// for chunk in similar_chunks {
+    ///     println!("Similar: {}", chunk.content);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn search_similar_chunks(
         &self,
         query_embedding: &[half::f16],
@@ -605,7 +981,32 @@ impl EnhancedFileIndex {
         Ok(similarities.into_iter().map(|(_, chunk)| chunk).collect())
     }
 
-    /// Get statistics about the index
+    /// Get comprehensive statistics about the stored index.
+    ///
+    /// Returns detailed statistics about the content stored in the database,
+    /// including counts of files, chunks, and embeddings. This provides insight
+    /// into the size and completeness of the indexed data.
+    ///
+    /// # Returns
+    /// IndexStats containing counts and statistics about the indexed data
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
+    /// # use std::path::Path;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
+    ///
+    /// let stats = index.get_index_stats().await?;
+    /// println!("Index contains {} files with {} chunks",
+    ///          stats.files_count, stats.chunks_count);
+    /// println!("{} chunks have embeddings", stats.embedded_chunks_count);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_index_stats(&self) -> Result<IndexStats> {
         let files_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM files")
             .fetch_one(&self.pool)

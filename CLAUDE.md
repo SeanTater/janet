@@ -79,6 +79,13 @@ MCP (Model Context Protocol) server for AI integration
 - **Testing**: Use tracing (not log), focus on happy paths first, use "sans io" patterns
 - **Performance**: f16 embeddings for memory efficiency, async-first architecture
 
+### Documentation Standards
+- **Module-level docs**: Comprehensive documentation with architecture, key components, usage examples
+- **Method-level docs**: Concise documentation that references module docs instead of repeating information
+- **Consistent style**: Use "See module docs for..." to avoid verbose repetition in method documentation
+- **Examples**: Include usage examples in module docs, minimal examples in method docs when needed
+- **Public API coverage**: All public functions, structs, enums, and traits must be documented
+
 ## Git Workflow
 - Never commit directly to main. Work in feature branches, and create PRs.
 - Commit and push (to a feature branch and PR) whenever you feel the code is generally functional and tests are green.

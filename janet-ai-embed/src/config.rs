@@ -2,10 +2,11 @@
 
 use crate::error::{EmbedError, Result};
 use derive_builder::Builder;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 /// Configuration for tokenizer files
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Clone, Builder, Serialize)]
 #[builder(setter(into))]
 pub struct TokenizerConfig {
     /// Path to the tokenizer.json file
@@ -20,12 +21,50 @@ pub struct TokenizerConfig {
 }
 
 impl TokenizerConfig {
-    /// Create a new tokenizer configuration using the builder
+    /// Create a new tokenizer configuration using the builder pattern.
+    ///
+    /// This returns a builder that allows you to set each field individually.
+    /// Use this when you need fine-grained control over tokenizer file paths.
+    ///
+    /// # Returns
+    /// A builder instance for constructing TokenizerConfig
+    ///
+    /// # Example
+    /// ```
+    /// use janet_ai_embed::TokenizerConfig;
+    ///
+    /// let config = TokenizerConfig::builder()
+    ///     .tokenizer_path("/path/to/tokenizer.json")
+    ///     .config_path("/path/to/config.json")
+    ///     .special_tokens_map_path("/path/to/special_tokens_map.json")
+    ///     .build()
+    ///     .unwrap();
+    /// ```
     pub fn builder() -> TokenizerConfigBuilder {
         TokenizerConfigBuilder::default()
     }
 
-    /// Create a standard tokenizer configuration for a model directory
+    /// Create a standard tokenizer configuration for a model directory.
+    ///
+    /// This assumes the standard HuggingFace model layout with files:
+    /// - `tokenizer.json` - The tokenizer configuration
+    /// - `config.json` - Model configuration
+    /// - `special_tokens_map.json` - Special token mappings
+    /// - `tokenizer_config.json` - Additional tokenizer configuration (optional)
+    ///
+    /// # Arguments
+    /// * `model_dir` - Path to the directory containing the tokenizer files
+    ///
+    /// # Returns
+    /// A configured TokenizerConfig with standard file paths
+    ///
+    /// # Example
+    /// ```
+    /// use janet_ai_embed::TokenizerConfig;
+    ///
+    /// let config = TokenizerConfig::standard("/path/to/model");
+    /// // Will look for files like /path/to/model/tokenizer.json, etc.
+    /// ```
     pub fn standard<P: AsRef<Path>>(model_dir: P) -> Self {
         let model_dir = model_dir.as_ref();
         TokenizerConfigBuilder::default()
@@ -37,7 +76,29 @@ impl TokenizerConfig {
             .expect("Failed to build TokenizerConfig")
     }
 
-    /// Create a tokenizer configuration with custom paths
+    /// Create a tokenizer configuration with custom file paths.
+    ///
+    /// Use this when your tokenizer files are in non-standard locations or have
+    /// different names than the HuggingFace defaults.
+    ///
+    /// # Arguments
+    /// * `tokenizer_path` - Path to the tokenizer.json file
+    /// * `config_path` - Path to the config.json file
+    /// * `special_tokens_map_path` - Path to the special_tokens_map.json file
+    ///
+    /// # Returns
+    /// A configured TokenizerConfig with the specified file paths
+    ///
+    /// # Example
+    /// ```
+    /// use janet_ai_embed::TokenizerConfig;
+    ///
+    /// let config = TokenizerConfig::custom(
+    ///     "/custom/path/my_tokenizer.json",
+    ///     "/custom/path/my_config.json",
+    ///     "/custom/path/my_special_tokens.json"
+    /// );
+    /// ```
     pub fn custom<P1, P2, P3>(
         tokenizer_path: P1,
         config_path: P2,
@@ -56,7 +117,25 @@ impl TokenizerConfig {
             .expect("Failed to build TokenizerConfig")
     }
 
-    /// Validate that all required tokenizer files exist
+    /// Validate that all required tokenizer files exist on the filesystem.
+    ///
+    /// This checks that the tokenizer.json, config.json, and special_tokens_map.json
+    /// files exist and are readable. The tokenizer_config.json file is optional.
+    ///
+    /// # Returns
+    /// `Ok(())` if all required files exist, or an error describing the missing file
+    ///
+    /// # Errors
+    /// Returns `EmbedError::InvalidConfig` if any required file is missing
+    ///
+    /// # Example
+    /// ```no_run
+    /// use janet_ai_embed::TokenizerConfig;
+    ///
+    /// let config = TokenizerConfig::standard("/path/to/model");
+    /// config.validate()?; // Will error if files don't exist
+    /// # Ok::<(), janet_ai_embed::EmbedError>(())
+    /// ```
     pub fn validate(&self) -> Result<()> {
         let paths_to_check = [
             ("tokenizer", &self.tokenizer_path),
@@ -89,7 +168,7 @@ impl TokenizerConfig {
 }
 
 /// Configuration for embedding models
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Clone, Builder, Serialize)]
 #[builder(setter(into))]
 pub struct EmbedConfig {
     /// Path to the base directory containing model files
@@ -114,12 +193,12 @@ pub struct EmbedConfig {
 }
 
 impl EmbedConfig {
-    /// Create a new embedding configuration using the builder
+    /// Creates a new builder for custom configuration. See module docs for usage examples.
     pub fn builder() -> EmbedConfigBuilder {
         EmbedConfigBuilder::default()
     }
 
-    /// Create a new embedding configuration (convenience method)
+    /// Creates basic configuration with required parameters. See module docs for details.
     pub fn new<P: AsRef<Path>>(
         model_base_path: P,
         model_name: impl Into<String>,
@@ -134,7 +213,7 @@ impl EmbedConfig {
             .expect("Failed to build EmbedConfig")
     }
 
-    /// Create a configuration for a HuggingFace model
+    /// Creates configuration for HuggingFace model download. See module docs for details.
     pub fn from_huggingface<P: AsRef<Path>>(
         model_base_path: P,
         model_name: impl Into<String>,
@@ -151,7 +230,7 @@ impl EmbedConfig {
             .expect("Failed to build EmbedConfig")
     }
 
-    /// Create a default configuration for testing with a given path
+    /// Creates default configuration with Arctic Embed XS model. See module docs for details.
     pub fn default_with_path<P: AsRef<Path>>(model_base_path: P) -> Self {
         let model_dir = model_base_path.as_ref().join("snowflake-arctic-embed-xs");
         let tokenizer_config = TokenizerConfig::standard(&model_dir);
@@ -162,7 +241,7 @@ impl EmbedConfig {
         )
     }
 
-    /// Create a ModernBERT-large configuration
+    /// Creates configuration for ModernBERT-large model from HuggingFace. See module docs for details.
     pub fn modernbert_large<P: AsRef<Path>>(model_base_path: P) -> Self {
         let model_dir = model_base_path.as_ref().join("ModernBERT-large");
         let tokenizer_config = TokenizerConfig::standard(&model_dir);
@@ -174,12 +253,12 @@ impl EmbedConfig {
         )
     }
 
-    /// Set the batch size for embedding generation (builder style)
+    /// Sets batch size for embedding generation. See module docs for usage examples.
     pub fn with_batch_size(self, batch_size: usize) -> Self {
         Self { batch_size, ..self }
     }
 
-    /// Set whether to normalize embeddings (builder style)
+    /// Sets embedding normalization. See module docs for usage examples.
     pub fn with_normalize(self, normalize: bool) -> Self {
         Self { normalize, ..self }
     }
@@ -192,7 +271,22 @@ impl EmbedConfig {
         }
     }
 
-    /// Get the full path to the model directory
+    /// Get the full path where this model's files are stored.
+    ///
+    /// This combines the base path with the model name to create the directory
+    /// where all model files (ONNX, tokenizer, etc.) are located.
+    ///
+    /// # Returns
+    /// The complete path to the model directory
+    ///
+    /// # Example
+    /// ```
+    /// use janet_ai_embed::EmbedConfig;
+    ///
+    /// let config = EmbedConfig::modernbert_large("/tmp/models");
+    /// let model_path = config.model_path();
+    /// // Returns PathBuf("/tmp/models/ModernBERT-large")
+    /// ```
     pub fn model_path(&self) -> PathBuf {
         self.model_base_path.join(&self.model_name)
     }
@@ -216,7 +310,24 @@ impl EmbedConfig {
         &self.tokenizer_config
     }
 
-    /// Check if this is a HuggingFace model
+    /// Check if this configuration is set up for a HuggingFace model.
+    ///
+    /// Returns `true` if this config has a HuggingFace repository specified,
+    /// meaning the model will be downloaded from HuggingFace Hub.
+    ///
+    /// # Returns
+    /// `true` if configured for HuggingFace download, `false` for local models
+    ///
+    /// # Example
+    /// ```
+    /// use janet_ai_embed::EmbedConfig;
+    ///
+    /// let hf_config = EmbedConfig::modernbert_large("/tmp/models");
+    /// assert!(hf_config.is_huggingface_model());
+    ///
+    /// let local_config = EmbedConfig::default_with_path("/tmp/models");
+    /// assert!(!local_config.is_huggingface_model());
+    /// ```
     pub fn is_huggingface_model(&self) -> bool {
         self.hf_model_repo.is_some()
     }
