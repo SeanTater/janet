@@ -12,7 +12,6 @@ use std::process::Stdio;
 // For reliable testing, prefer the unit tests in src/ modules.
 
 #[cfg(test)]
-#[allow(unused_imports)]
 use std::path::PathBuf;
 use tempfile::tempdir;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -195,10 +194,7 @@ async fn test_mcp_initialize() {
 #[tokio::test]
 #[ignore] // Very flaky - requires full indexing, embeddings, model downloading, process management, and stdio communication
 async fn test_semantic_search_with_real_data() {
-    use janet_ai_retriever::retrieval::{
-        indexing_engine::{IndexingEngine, IndexingEngineConfig},
-        indexing_mode::IndexingMode,
-    };
+    use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
 
     let temp_dir = tempdir().expect("Failed to create temp directory");
     let test_repo_path = temp_dir.path().join("test_repo");
@@ -215,7 +211,6 @@ async fn test_semantic_search_with_real_data() {
 
     // Build an index using IndexingEngine directly (like the working example)
     let indexing_config = IndexingEngineConfig::new("mcp-test".to_string(), test_repo_path.clone())
-        .with_mode(IndexingMode::FullReindex)
         .with_max_workers(2)
         .with_chunk_size(500);
 
@@ -238,7 +233,7 @@ async fn test_semantic_search_with_real_data() {
 
     // Start the engine and perform full reindex
     println!("🔄 Starting full reindex...");
-    engine.start().await.expect("Failed to start indexing");
+    engine.start(true).await.expect("Failed to start indexing");
 
     // Wait for indexing to complete
     let mut attempts = 0;

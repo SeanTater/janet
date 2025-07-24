@@ -77,6 +77,16 @@ pub struct FastEmbedProvider {
     dimension: usize,
 }
 
+impl std::fmt::Debug for FastEmbedProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FastEmbedProvider")
+            .field("config", &self.config)
+            .field("model", &self.model.is_some())
+            .field("dimension", &self.dimension)
+            .finish()
+    }
+}
+
 impl FastEmbedProvider {
     /// Create a new FastEmbed provider with the given configuration
     pub fn new(config: EmbedConfig) -> Self {

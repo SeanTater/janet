@@ -121,21 +121,34 @@ impl StatusApi {
         status.indexing_status = Self::get_indexing_status(indexing_engine).await.ok();
         status.index_health = Self::get_index_health(enhanced_index).await.ok();
         status.indexing_configuration = Self::get_indexing_config(config).await.ok();
-        
+
         // Get embedding model info
-        let models = enhanced_index.get_all_embedding_models().await.ok().unwrap_or_default();
+        let models = enhanced_index
+            .get_all_embedding_models()
+            .await
+            .ok()
+            .unwrap_or_default();
         status.embedding_model_info = if let Some(first_model) = models.first() {
-            Self::get_embedding_model_info(Some(first_model)).await.ok().flatten()
+            Self::get_embedding_model_info(Some(first_model))
+                .await
+                .ok()
+                .flatten()
         } else {
             None
         };
-        
-        status.database_info = Self::get_database_info(enhanced_index, base_path).await.ok();
+
+        status.database_info = Self::get_database_info(enhanced_index, base_path)
+            .await
+            .ok();
         status.dependency_versions = Self::get_dependency_versions().await.ok();
         status.consistency_report = Self::validate_index_consistency(enhanced_index).await.ok();
         status.file_system_status = Self::get_file_system_status(config).await.ok();
-        status.search_performance = Self::get_search_performance_stats(enhanced_index).await.ok();
-        status.indexing_performance = Self::get_indexing_performance_stats(indexing_engine).await.ok();
+        status.search_performance = Self::get_search_performance_stats(enhanced_index)
+            .await
+            .ok();
+        status.indexing_performance = Self::get_indexing_performance_stats(indexing_engine)
+            .await
+            .ok();
         status.stale_files = Self::get_stale_files(indexing_engine, config).await.ok();
         status.network_status = Self::get_network_status().await.ok();
         status.supported_file_types = Self::get_supported_file_types(config).await.ok();
@@ -234,11 +247,11 @@ impl StatusApi {
     ) -> Result<IndexingConfiguration> {
         Ok(IndexingConfiguration {
             max_chunk_size: config.chunking_config.max_chunk_size,
-            chunk_overlap: 0,
-            included_file_patterns: Vec::new(),
-            excluded_file_patterns: Vec::new(),
-            max_file_size_bytes: None,
-            indexing_mode: format!("{}", config.mode),
+            chunk_overlap: 0, // TODO: ChunkingConfig doesn't currently have overlap
+            included_file_patterns: Vec::new(), // TODO: Add file pattern support to ChunkingStrategy
+            excluded_file_patterns: Vec::new(), // TODO: Add file pattern support to ChunkingStrategy
+            max_file_size_bytes: None,          // TODO: Add to chunking config
+            indexing_mode: "read-only-default".to_string(),
             worker_thread_count: config.max_workers,
             repository: config.repository.clone(),
             base_path: config.base_path.to_string_lossy().to_string(),

@@ -112,7 +112,7 @@ impl ChunkingConfig {
 }
 
 /// Strategy for chunking files - delegates entirely to janet-ai-context
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChunkingStrategy {
     config: ChunkingConfig,
 }

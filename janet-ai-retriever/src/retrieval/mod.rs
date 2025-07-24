@@ -15,7 +15,6 @@
 //!
 //! - **Analyzer**: Determines file types and processing strategies
 //! - **ChunkingStrategy**: Configures how files are split into searchable chunks
-//! - **IndexingMode**: Controls indexing behavior (full reindex, incremental, etc.)
 //!
 //! ## Architecture Flow
 //!
@@ -32,7 +31,6 @@
 //! use janet_ai_retriever::retrieval::{
 //!     file_index::FileIndex,
 //!     indexing_engine::{IndexingEngine, IndexingEngineConfig},
-//!     indexing_mode::IndexingMode,
 //! };
 //! use std::path::Path;
 //!
@@ -41,10 +39,9 @@
 //! let file_index = FileIndex::open(Path::new(".")).await?;
 //!
 //! // Or use the full indexing engine
-//! let config = IndexingEngineConfig::new("my-project".to_string(), Path::new(".").to_path_buf())
-//!     .with_mode(IndexingMode::ContinuousMonitoring);
+//! let config = IndexingEngineConfig::new("my-project".to_string(), Path::new(".").to_path_buf());
 //! let mut engine = IndexingEngine::new(config).await?;
-//! engine.start().await?;
+//! engine.start(false).await?;  // Start continuous monitoring
 //! # Ok(())
 //! # }
 //! ```
@@ -54,5 +51,4 @@ pub mod chunking_strategy;
 pub mod enhanced_index;
 pub mod file_index;
 pub mod indexing_engine;
-pub mod indexing_mode;
 pub mod task_queue;

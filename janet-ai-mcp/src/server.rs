@@ -1,5 +1,5 @@
-use std::sync::Arc;
-
+#![allow(dead_code)]
+// Much of the code is used by the MCP server tools, which foul the static analysis
 use crate::ServerConfig;
 use crate::tools::{
     self, regex_search::RegexSearchRequest, semantic_search::SemanticSearchRequest,
@@ -21,50 +21,47 @@ use rmcp::{
     model::{CallToolResult, Content, ServerInfo},
 };
 use tokio::io::{stdin, stdout};
-use tokio::sync::Mutex;
 use tracing::info;
 
 /// Janet MCP Server that provides search capabilities across codebases
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct JanetMcpServer {
     config: ServerConfig,
-    #[allow(dead_code)]
     enhanced_index: EnhancedFileIndex,
-    #[allow(dead_code)]
-    indexing_engine: Arc<Mutex<IndexingEngine>>,
+    indexing_engine: IndexingEngine,
     indexing_config: IndexingEngineConfig,
-    tool_router: ToolRouter<Self>,
 }
 
 #[rmcp::tool_router]
 impl JanetMcpServer {
     /// Create a new Janet MCP server with the given configuration
+    /// Requires an existing index database - will fail if not found
     pub async fn new(config: ServerConfig) -> Result<Self> {
         info!(
             "Initializing Janet MCP server with root: {:?}",
             config.root_dir
         );
 
-        use janet_ai_retriever::retrieval::indexing_mode::IndexingMode;
+        let db_path = config.root_dir.join(".janet-ai.db");
+        if !db_path.exists() {
+            return Err(anyhow::anyhow!(
+                "No index database found at {:?}. Run 'janet-ai-retriever index --repo .' to create one.",
+                db_path
+            ));
+        }
 
-        // Create enhanced index
+        // Initialize retriever components
         let enhanced_index = EnhancedFileIndex::open(&config.root_dir).await?;
-
-        // Create indexing configuration
         let indexing_config =
             IndexingEngineConfig::new("local".to_string(), config.root_dir.clone())
-                .with_mode(IndexingMode::ReadOnly)
                 .with_max_workers(4);
-
-        // Create indexing engine
         let indexing_engine = IndexingEngine::new(indexing_config.clone()).await?;
 
         Ok(Self {
             config,
             enhanced_index,
-            indexing_engine: Arc::new(Mutex::new(indexing_engine)),
+            indexing_engine,
             indexing_config,
-            tool_router: Self::tool_router(),
         })
     }
 
@@ -86,34 +83,25 @@ impl JanetMcpServer {
             std::env::current_dir().unwrap_or_else(|_| "<unknown>".into())
         );
 
-        // Use comprehensive diagnostic APIs if available
-        let indexing_engine = self.indexing_engine.lock().await;
-        status.push_str(&self.get_comprehensive_status(&self.enhanced_index, &indexing_engine, &self.indexing_config).await);
-
-        Ok(CallToolResult::success(vec![Content::text(status)]))
-    }
-
-    /// Get comprehensive status using all diagnostic APIs
-    async fn get_comprehensive_status(
-        &self,
-        enhanced_index: &EnhancedFileIndex,
-        indexing_engine: &IndexingEngine,
-        indexing_config: &IndexingEngineConfig,
-    ) -> String {
-        match StatusApi::get_comprehensive_status(
-            enhanced_index,
-            indexing_engine,
-            indexing_config,
+        // Get comprehensive status from StatusApi
+        let status_result = match StatusApi::get_comprehensive_status(
+            &self.enhanced_index,
+            &self.indexing_engine,
+            &self.indexing_config,
             &self.config.root_dir,
         )
         .await
         {
             Ok(status) => match status.to_toml() {
                 Ok(toml_output) => toml_output,
-                Err(e) => format!("⚠ Failed to serialize status to TOML: {}", e),
+                Err(e) => format!("⚠ Failed to serialize status to TOML: {e}"),
             },
-            Err(e) => format!("⚠ Failed to get comprehensive status: {}", e),
-        }
+            Err(e) => format!("⚠ Failed to get status: {e}"),
+        };
+
+        status.push_str(&status_result);
+
+        Ok(CallToolResult::success(vec![Content::text(status)]))
     }
 
     /// Regex search tool - search project files, dependencies, and docs
@@ -143,11 +131,11 @@ impl JanetMcpServer {
     }
 
     /// Serve the MCP server using stdio transport
-    pub async fn serve_stdio(&self) -> Result<()> {
+    pub async fn serve_stdio(self) -> Result<()> {
         info!("Starting MCP server with stdio transport");
 
         let transport = (stdin(), stdout());
-        let server = self.clone().serve(transport).await?;
+        let server = self.serve(transport).await?;
         let quit_reason = server.waiting().await?;
 
         info!("MCP server quit: {:?}", quit_reason);
@@ -175,18 +163,72 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_server_creation() {
+    async fn test_server_creation_requires_index() {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
         let config = ServerConfig {
             root_dir: temp_dir.path().to_path_buf(),
         };
 
-        let server = JanetMcpServer::new(config).await;
-        assert!(server.is_ok(), "Server creation should succeed");
+        // Should fail without index database
+        let result = JanetMcpServer::new(config).await;
+        assert!(
+            result.is_err(),
+            "Server creation should fail without index database"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No index database found")
+        );
     }
 
     #[tokio::test]
-    async fn test_initialize_retriever_components_creates_database() {
+    async fn test_status_with_index() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Create index database by initializing server components
+        let enhanced_index = EnhancedFileIndex::open(&config.root_dir).await;
+        assert!(enhanced_index.is_ok(), "Should create index database");
+
+        let server = JanetMcpServer::new(config)
+            .await
+            .expect("Server creation should succeed with index");
+        let status_result = server.status().await.expect("Status should succeed");
+
+        // Should show TOML status since index exists
+        let status_output = format!("{:?}", status_result);
+        assert!(status_output.contains("Janet AI MCP Server Status"));
+        assert!(status_output.contains("Server Version:"));
+        assert!(status_output.contains("Root Directory:"));
+        assert!(status_output.contains("Working Directory:"));
+    }
+
+    #[tokio::test]
+    async fn test_status_with_corrupted_database_fails_initialization() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
+
+        // Create an empty .janet-ai.db file to simulate corrupted database
+        let db_path = temp_dir.path().join(".janet-ai.db");
+        std::fs::write(&db_path, b"fake database content").expect("Failed to create fake database");
+
+        let config = ServerConfig {
+            root_dir: temp_dir.path().to_path_buf(),
+        };
+
+        // Should fail to initialize with corrupted database
+        let server = JanetMcpServer::new(config).await;
+        assert!(
+            server.is_err(),
+            "Server creation should fail with corrupted database"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_enhanced_file_index_creates_database() {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
         let config = ServerConfig {
             root_dir: temp_dir.path().to_path_buf(),
@@ -196,7 +238,7 @@ mod tests {
         assert!(!db_path.exists(), "Database should not exist initially");
 
         // Should succeed and create database
-        let result = JanetMcpServer::new(config).await;
+        let result = EnhancedFileIndex::open(&config.root_dir).await;
         assert!(
             result.is_ok(),
             "Should succeed and create database if missing"

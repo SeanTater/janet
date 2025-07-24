@@ -22,10 +22,10 @@
 //!
 //! ## Features
 //!
-//! ### Multiple Indexing Modes
-//! - **FullReindex**: Complete rebuild of the index
-//! - **ContinuousMonitoring**: Watch for file changes and update incrementally
-//! - **ReadOnly**: Access existing index without modifications
+//! ### Indexing Modes
+//! By default, the engine starts in read-only mode. Call `start(full_reindex)` to begin indexing:
+//! - `start(true)`: Complete rebuild of the index followed by continuous monitoring
+//! - `start(false)`: Continuous monitoring of file changes only
 //!
 //! ### Async Task Processing
 //! - Configurable worker pools for parallel processing
@@ -41,10 +41,7 @@
 //!
 //! ### Basic Indexing
 //! ```rust,no_run
-//! use janet_ai_retriever::retrieval::{
-//!     indexing_engine::{IndexingEngine, IndexingEngineConfig},
-//!     indexing_mode::IndexingMode,
-//! };
+//! use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
 //! use std::path::Path;
 //!
 //! # async fn example() -> anyhow::Result<()> {
@@ -52,12 +49,11 @@
 //!     "my-project".to_string(),
 //!     Path::new(".").to_path_buf()
 //! )
-//! .with_mode(IndexingMode::ContinuousMonitoring)
 //! .with_max_workers(4)
 //! .with_chunk_size(1000);
 //!
 //! let mut engine = IndexingEngine::new(config).await?;
-//! engine.start().await?;
+//! engine.start(false).await?;  // Start continuous monitoring
 //!
 //! // Process pending work
 //! while engine.get_queue_size().await > 0 {
@@ -75,15 +71,15 @@
 //! ### Read-Only Access
 //! ```rust,no_run
 //! # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
-//! # use janet_ai_retriever::retrieval::indexing_mode::IndexingMode;
 //! # use std::path::Path;
 //! # async fn example() -> anyhow::Result<()> {
 //! let config = IndexingEngineConfig::new(
 //!     "existing-project".to_string(),
 //!     Path::new(".").to_path_buf()
-//! ).with_mode(IndexingMode::ReadOnly);
+//! );
 //!
 //! let engine = IndexingEngine::new(config).await?;
+//! // Engine starts in read-only mode by default
 //! let enhanced_index = engine.get_enhanced_index();
 //! let stats = enhanced_index.get_index_stats().await?;
 //! println!("Index contains {} files with {} chunks",
@@ -110,7 +106,6 @@ use tracing::{debug, error, info, warn};
 use super::chunking_strategy::{ChunkingConfig, ChunkingStrategy};
 use super::enhanced_index::{EmbeddingModelMetadata, EnhancedFileIndex, IndexMetadata, IndexStats};
 use super::file_index::{ChunkRef, FileRef};
-use super::indexing_mode::IndexingMode;
 use super::task_queue::{IndexingTask, TaskQueue, TaskQueueConfig, TaskType};
 
 /// Configuration for the indexing engine
@@ -120,8 +115,6 @@ pub struct IndexingEngineConfig {
     pub repository: String,
     /// Base path for indexing
     pub base_path: PathBuf,
-    /// Indexing mode
-    pub mode: IndexingMode,
     /// Task queue configuration
     pub task_queue_config: TaskQueueConfig,
     /// Chunking configuration
@@ -140,17 +133,11 @@ impl IndexingEngineConfig {
             chunking_config: ChunkingConfig::new(repository.clone()),
             repository,
             base_path,
-            mode: IndexingMode::default(),
             task_queue_config: TaskQueueConfig::default(),
             embedding_config: None,
             max_workers: 4,
             file_timeout: Duration::from_secs(60),
         }
-    }
-
-    pub fn with_mode(mut self, mode: IndexingMode) -> Self {
-        self.mode = mode;
-        self
     }
 
     pub fn with_embedding_config(mut self, config: EmbedConfig) -> Self {
@@ -180,6 +167,7 @@ pub struct FileProcessingResult {
 }
 
 /// The main indexing engine that orchestrates file watching, chunking, and embedding
+#[derive(Debug)]
 pub struct IndexingEngine {
     config: IndexingEngineConfig,
     enhanced_index: EnhancedFileIndex,
@@ -190,6 +178,7 @@ pub struct IndexingEngine {
     workers: Vec<tokio::task::JoinHandle<()>>,
     shutdown_sender: Option<mpsc::UnboundedSender<()>>,
     stats: RwLock<ProcessingStats>,
+    started_for_indexing: bool,
 }
 
 #[derive(Debug, Default)]
@@ -230,28 +219,23 @@ impl IndexingEngine {
         // Initialize embedding provider if configured
         let (embedding_provider, embedding_model_metadata) =
             if let Some(embed_config) = &config.embedding_config {
-                if config.mode.allows_indexing() {
-                    info!(
-                        "Initializing embedding provider: {}",
-                        embed_config.model_name
-                    );
+                info!(
+                    "Initializing embedding provider: {}",
+                    embed_config.model_name
+                );
 
-                    let provider = FastEmbedProvider::create(embed_config.clone()).await?;
-                    let metadata = EmbeddingModelMetadata::new(
-                        embed_config.model_name.clone(),
-                        "fastembed".to_string(),
-                        provider.embedding_dimension(),
-                    )
-                    .with_normalized(embed_config.normalize);
+                let provider = FastEmbedProvider::create(embed_config.clone()).await?;
+                let metadata = EmbeddingModelMetadata::new(
+                    embed_config.model_name.clone(),
+                    "fastembed".to_string(),
+                    provider.embedding_dimension(),
+                )
+                .with_normalized(embed_config.normalize);
 
-                    // Register the model in the database
-                    enhanced_index.register_embedding_model(&metadata).await?;
+                // Register the model in the database
+                enhanced_index.register_embedding_model(&metadata).await?;
 
-                    (Some(provider), Some(metadata))
-                } else {
-                    info!("Read-only mode: skipping embedding provider initialization");
-                    (None, None)
-                }
+                (Some(provider), Some(metadata))
             } else {
                 info!("No embedding configuration provided");
                 (None, None)
@@ -277,17 +261,19 @@ impl IndexingEngine {
             workers: Vec::new(),
             shutdown_sender: None,
             stats: RwLock::new(ProcessingStats::default()),
+            started_for_indexing: false,
         })
     }
 
     /// Start the indexing engine
-    pub async fn start(&mut self) -> Result<()> {
-        info!("Starting IndexingEngine in mode: {}", self.config.mode);
+    pub async fn start(&mut self, full_reindex: bool) -> Result<()> {
+        info!(
+            "Starting IndexingEngine with full_reindex: {}",
+            full_reindex
+        );
 
-        if !self.config.mode.allows_indexing() {
-            info!("Read-only mode: indexing workers will not be started");
-            return Ok(());
-        }
+        // Mark as started for indexing
+        self.started_for_indexing = true;
 
         // Start task queue processor
         self.task_queue.start_processor().await;
@@ -303,19 +289,8 @@ impl IndexingEngine {
         info!("Started {} indexing workers", self.config.max_workers);
 
         // Perform initial index if needed
-        match self.config.mode {
-            IndexingMode::FullReindex => {
-                self.schedule_full_reindex().await?;
-            }
-            IndexingMode::ContinuousMonitoring => {
-                // Check if index is empty and do initial scan if needed
-                let stats = self.enhanced_index.get_index_stats().await?;
-                if stats.files_count == 0 {
-                    info!("Index is empty, performing initial scan...");
-                    self.schedule_full_reindex().await?;
-                }
-            }
-            IndexingMode::ReadOnly => {}
+        if full_reindex {
+            self.schedule_full_reindex().await?;
         }
 
         Ok(())
@@ -515,9 +490,9 @@ impl IndexingEngine {
 
     /// Schedule a full reindex by walking the directory tree and adding individual file tasks
     pub async fn schedule_full_reindex(&self) -> Result<()> {
-        if !self.config.mode.allows_indexing() {
+        if !self.started_for_indexing {
             return Err(anyhow::anyhow!(
-                "Full reindex not allowed in read-only mode"
+                "Full reindex not allowed in read-only mode. Call start() first."
             ));
         }
 
@@ -591,9 +566,9 @@ impl IndexingEngine {
 
     /// Schedule indexing of a single file
     pub async fn schedule_file_index(&self, file_path: PathBuf) -> Result<()> {
-        if !self.config.mode.allows_indexing() {
+        if !self.started_for_indexing {
             return Err(anyhow::anyhow!(
-                "File indexing not allowed in read-only mode"
+                "File indexing not allowed in read-only mode. Call start() first."
             ));
         }
 
@@ -628,24 +603,18 @@ impl IndexingEngine {
     pub async fn shutdown(&mut self) -> Result<()> {
         info!("Shutting down IndexingEngine");
 
-        // Only shutdown workers and queue if indexing was enabled
-        if self.config.mode.allows_indexing() {
-            // Send shutdown signal to workers
-            if let Some(sender) = self.shutdown_sender.take() {
-                let _ = sender.send(());
-            }
-
-            // Wait for workers to finish
-            for worker in self.workers.drain(..) {
-                let _ = worker.await;
-            }
-
-            // Shutdown task queue
-            self.task_queue.shutdown().await;
-        } else {
-            // In read-only mode, just clear any shutdown sender
-            self.shutdown_sender.take();
+        // Send shutdown signal to workers
+        if let Some(sender) = self.shutdown_sender.take() {
+            let _ = sender.send(());
         }
+
+        // Wait for workers to finish
+        for worker in self.workers.drain(..) {
+            let _ = worker.await;
+        }
+
+        // Shutdown task queue
+        self.task_queue.shutdown().await;
 
         info!("IndexingEngine shutdown complete");
         Ok(())
@@ -672,8 +641,7 @@ mod tests {
     async fn test_indexing_engine_creation() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
 
@@ -688,11 +656,10 @@ mod tests {
     async fn test_file_scheduling() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ContinuousMonitoring);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let mut engine = IndexingEngine::new_memory(config).await?;
-        engine.start().await?;
+        engine.start(false).await?;
 
         // Create a test file
         let test_file = temp_dir.path().join("test.rs");
@@ -726,11 +693,10 @@ mod tests {
         tokio::fs::write(subdir.join("test.rs"), "#[test] fn test() {}").await?;
 
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::FullReindex);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let mut engine = IndexingEngine::new_memory(config).await?;
-        engine.start().await?;
+        engine.start(true).await?;
 
         // Get initial queue size (should be 0)
         let initial_queue_size = engine.task_queue.queue_size().await;
