@@ -1,3 +1,63 @@
+//! Filesystem monitoring for incremental indexing updates.
+//!
+//! This module provides real-time monitoring of filesystem changes to enable
+//! incremental indexing. It watches for file modifications, creations, and deletions,
+//! debouncing events to avoid excessive processing during rapid changes.
+//!
+//! ## Key Components
+//!
+//! - **DirectoryTracker**: Monitors filesystem changes with debounced event handling
+//! - **Event Processing**: Filters and processes relevant file system events
+//! - **Integration**: Works with IndexingEngine for automatic re-indexing
+//!
+//! ## Features
+//!
+//! ### Debounced Event Handling
+//! - Reduces noise from rapid file modifications (e.g., during compilation)
+//! - Configurable debounce intervals
+//! - Batches related changes for efficient processing
+//!
+//! ### Intelligent Filtering
+//! - Respects .gitignore patterns
+//! - Filters by file types relevant for indexing
+//! - Excludes temporary and system files
+//!
+//! ### Error Resilience
+//! - Graceful handling of filesystem permission errors
+//! - Automatic recovery from watcher failures
+//! - Continues monitoring even if individual events fail
+//!
+//! ## Usage
+//!
+//! Typically used internally by IndexingEngine, but can be used standalone:
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::directory_watcher::DirectoryTracker;
+//! use std::path::Path;
+//! use tokio::sync::mpsc;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let (event_tx, mut event_rx) = mpsc::channel(1000);
+//!
+//! // Start monitoring a directory
+//! let tracker = DirectoryTracker::new(Path::new("."), event_tx).await?;
+//!
+//! // Process file change events
+//! while let Some(changed_path) = event_rx.recv().await {
+//!     println!("File changed: {:?}", changed_path);
+//!     // Trigger re-indexing for this file
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Implementation Notes
+//!
+//! - Uses `notify` crate for cross-platform filesystem monitoring
+//! - Debouncing prevents rapid-fire events during file saves
+//! - Event filtering happens before sending to avoid channel overflow
+//! - Monitors both file content changes and directory structure changes
+
 use std::{
     path::{Path, PathBuf},
     time::Duration,

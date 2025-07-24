@@ -1,3 +1,74 @@
+//! Indexing mode configuration for controlling indexing behavior.
+//!
+//! This module defines the operating modes for the indexing system, controlling
+//! whether the system performs full reindexing, incremental monitoring, or read-only
+//! operations. Each mode has different resource requirements and use cases.
+//!
+//! ## Indexing Modes
+//!
+//! ### FullReindex
+//! Complete rebuild of the entire index from scratch.
+//! - **Use case**: Initial setup, major model changes, corrupted index recovery
+//! - **Resources**: High CPU, memory, and storage I/O during rebuild
+//! - **Duration**: Proportional to codebase size (minutes to hours)
+//! - **Safety**: Replaces all existing data
+//!
+//! ### ContinuousMonitoring (Default)
+//! Incremental updates based on filesystem changes.
+//! - **Use case**: Active development environments, production deployments
+//! - **Resources**: Low baseline usage, spikes during file changes
+//! - **Duration**: Near real-time updates
+//! - **Safety**: Preserves existing data, only updates changed files
+//!
+//! ### ReadOnly
+//! No indexing operations, only search queries.
+//! - **Use case**: Search-only services, shared read-only environments
+//! - **Resources**: Minimal (no embedding generation or file watching)
+//! - **Duration**: Instant startup
+//! - **Safety**: No data modifications
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::indexing_mode::IndexingMode;
+//!
+//! // Configure for different scenarios
+//! let initial_setup = IndexingMode::FullReindex;
+//! let development = IndexingMode::ContinuousMonitoring;
+//! let production_search = IndexingMode::ReadOnly;
+//!
+//! // Check capabilities
+//! if development.allows_indexing() {
+//!     println!("Will process file changes");
+//! }
+//!
+//! if development.allows_file_watching() {
+//!     println!("Will monitor filesystem");
+//! }
+//!
+//! // Parse from string (useful for CLI/config)
+//! let mode: IndexingMode = "continuous-monitoring".parse().unwrap();
+//! ```
+//!
+//! ## Mode Selection Guidelines
+//!
+//! ### When to use FullReindex
+//! - Setting up a new index
+//! - Switching embedding models
+//! - Recovering from database corruption
+//! - Major codebase restructuring
+//!
+//! ### When to use ContinuousMonitoring
+//! - Active development (default choice)
+//! - Production with ongoing changes
+//! - CI/CD pipelines that need fresh indexes
+//!
+//! ### When to use ReadOnly
+//! - Search-only microservices
+//! - Load-balanced search replicas
+//! - Demo/presentation environments
+//! - When filesystem watching is problematic
+
 use serde::{Deserialize, Serialize};
 
 /// Defines the operating mode for the file indexing system

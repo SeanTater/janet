@@ -1,3 +1,80 @@
+//! Core SQLite database operations for file and chunk storage.
+//!
+//! This module provides the foundational data layer for janet-ai-retriever, implementing
+//! direct SQLite operations for storing files, code chunks, and their embeddings.
+//!
+//! ## Key Components
+//!
+//! - **FileIndex**: Main database interface with optimized SQLite configuration
+//! - **FileRef**: Represents a source file with content and hash
+//! - **ChunkRef**: Represents a code chunk with optional f16 embeddings
+//!
+//! ## Database Schema
+//!
+//! ```sql
+//! -- Files table: tracks source files by hash
+//! CREATE TABLE files (
+//!     hash BLOB PRIMARY KEY,           -- blake3 hash (32 bytes)
+//!     relative_path TEXT UNIQUE,       -- path relative to project root
+//!     size INTEGER,                    -- file size in bytes
+//!     modified_at TIMESTAMP,           -- last modification time
+//!     indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+//! );
+//!
+//! -- Chunks table: stores code chunks with embeddings
+//! CREATE TABLE chunks (
+//!     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//!     file_hash BLOB REFERENCES files(hash),
+//!     relative_path TEXT,              -- denormalized for performance
+//!     line_start INTEGER,              -- chunk start line
+//!     line_end INTEGER,                -- chunk end line
+//!     content TEXT,                    -- actual chunk text
+//!     embedding BLOB,                  -- f16 embedding vector (optional)
+//!     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+//! );
+//! ```
+//!
+//! ## SQLite Optimizations
+//!
+//! - **WAL mode**: Better concurrency for read/write operations
+//! - **Large page size** (64KB): Optimized for embedding blob storage
+//! - **Auto-vacuum**: Keeps database size manageable
+//! - **Foreign keys**: Maintains referential integrity
+//! - **Strategic indexes**: On file hashes, paths, and modification times
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::file_index::{FileIndex, FileRef, ChunkRef};
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! // Open database (creates if missing)
+//! let index = FileIndex::open(Path::new(".")).await?;
+//!
+//! // Store a file
+//! let file = FileRef {
+//!     relative_path: "src/main.rs".to_string(),
+//!     content: b"fn main() {}".to_vec(),
+//!     hash: [0; 32], // blake3 hash
+//! };
+//! index.upsert_file(&file).await?;
+//!
+//! // Store chunks with embeddings
+//! let chunks = vec![ChunkRef {
+//!     id: None,
+//!     file_hash: [0; 32],
+//!     relative_path: "src/main.rs".to_string(),
+//!     line_start: 1,
+//!     line_end: 1,
+//!     content: "fn main() {}".to_string(),
+//!     embedding: Some(vec![half::f16::from_f32(0.1)]),
+//! }];
+//! index.upsert_chunks(&chunks).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use anyhow::Result;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Row, SqlitePool};

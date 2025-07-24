@@ -1,3 +1,82 @@
+//! Priority-based task queue for async indexing operations.
+//!
+//! This module provides a flexible task queue system for managing indexing work across
+//! multiple async workers. It supports priority-based scheduling, retry logic, and
+//! configurable concurrency to efficiently process large codebases.
+//!
+//! ## Key Components
+//!
+//! - **TaskQueue**: Main queue coordinator with priority scheduling
+//! - **IndexingTask**: Individual work items with metadata and priority
+//! - **TaskType**: Different types of indexing operations
+//! - **TaskPriority**: Priority levels for work prioritization
+//! - **TaskQueueConfig**: Configuration for queue behavior and limits
+//!
+//! ## Features
+//!
+//! ### Priority-Based Scheduling
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::task_queue::{TaskQueue, IndexingTask, TaskPriority, TaskType};
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let mut queue = TaskQueue::new(4).await; // 4 workers
+//!
+//! // High priority: recently modified files
+//! queue.enqueue(IndexingTask::new(
+//!     TaskType::IndexFile,
+//!     Path::new("src/main.rs").to_path_buf(),
+//!     TaskPriority::High
+//! )).await;
+//!
+//! // Background: routine indexing
+//! queue.enqueue(IndexingTask::new(
+//!     TaskType::IndexFile,
+//!     Path::new("docs/readme.md").to_path_buf(),
+//!     TaskPriority::Background
+//! )).await;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Work Distribution
+//! - Tasks are distributed across configurable worker count
+//! - Higher priority tasks are processed first
+//! - Failed tasks can be retried with backoff
+//! - Queue size monitoring prevents memory exhaustion
+//!
+//! ### Task Types
+//! - **IndexFile**: Process and chunk a single file
+//! - **GenerateEmbeddings**: Create embeddings for existing chunks
+//! - **RemoveFile**: Clean up deleted files from index
+//! - **Refresh**: Re-process files that may have changed
+//!
+//! ## Configuration
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::task_queue::{TaskQueue, TaskQueueConfig};
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let config = TaskQueueConfig {
+//!     max_workers: 8,                    // More workers for faster processing
+//!     max_queue_size: 10000,             // Prevent memory overflow
+//!     retry_attempts: 3,                 // Retry failed tasks
+//!     retry_delay: std::time::Duration::from_secs(5),
+//! };
+//!
+//! let queue = TaskQueue::with_config(config).await;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Integration
+//!
+//! Typically used by IndexingEngine to coordinate work:
+//! - File changes from DirectoryWatcher → TaskQueue
+//! - Embedding generation → TaskQueue
+//! - Database updates → TaskQueue
+//! - Statistics and progress tracking
+
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::path::PathBuf;

@@ -1,3 +1,80 @@
+//! Text chunking strategies for breaking files into searchable segments.
+//!
+//! This module provides intelligent text chunking using janet-ai-context to break
+//! source code files into appropriately-sized segments for embedding and search.
+//! It handles language-specific delimiters and maintains semantic boundaries.
+//!
+//! ## Key Components
+//!
+//! - **ChunkingStrategy**: Main interface for chunking files
+//! - **ChunkingConfig**: Configuration for chunk size and behavior
+//! - **Integration**: Uses janet-ai-context for intelligent text segmentation
+//!
+//! ## Features
+//!
+//! ### Language-Aware Chunking
+//! - Respects function and class boundaries
+//! - Uses appropriate delimiters for different programming languages
+//! - Preserves logical code structure in chunks
+//!
+//! ### Configurable Chunk Sizes
+//! - Character-based chunk size limits
+//! - Automatic size adjustment for long logical units
+//! - Balance between search granularity and context preservation
+//!
+//! ### Context Preservation
+//! - Maintains code context within chunks
+//! - Avoids splitting mid-statement or mid-function
+//! - Repository name context for better search relevance
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use janet_ai_retriever::retrieval::chunking_strategy::{ChunkingStrategy, ChunkingConfig};
+//! use std::path::Path;
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! let config = ChunkingConfig {
+//!     max_chunk_size: 1500,
+//!     repo_name: "my-project".to_string(),
+//! };
+//!
+//! let strategy = ChunkingStrategy::new(config);
+//!
+//! // Chunk a Rust file
+//! let content = std::fs::read_to_string("src/main.rs")?;
+//! let chunks = strategy.chunk_file(Path::new("src/main.rs"), &content).await?;
+//!
+//! for chunk in chunks {
+//!     println!("Chunk: lines {}-{}", chunk.line_start, chunk.line_end);
+//!     println!("Content: {}", chunk.content);
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Chunk Size Considerations
+//!
+//! ### Small Chunks (500-1000 chars)
+//! - **Pros**: More precise search results, faster embedding generation
+//! - **Cons**: May break logical code units, less context for search
+//! - **Best for**: Large codebases, fine-grained search
+//!
+//! ### Medium Chunks (1000-2000 chars)
+//! - **Pros**: Good balance of precision and context
+//! - **Cons**: Default choice for most use cases
+//! - **Best for**: General purpose code search
+//!
+//! ### Large Chunks (2000+ chars)
+//! - **Pros**: Maximum context preservation, fewer database entries
+//! - **Cons**: Less precise search, slower processing
+//! - **Best for**: Documentation, architectural search
+//!
+//! ## Integration with janet-ai-context
+//!
+//! This module leverages janet-ai-context's `TextContextBuilder` for intelligent
+//! segmentation that respects programming language syntax and semantics.
+
 use anyhow::Result;
 use janet_ai_context::{TextChunk, create_builder_for_path};
 use std::path::Path;
