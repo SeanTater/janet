@@ -43,11 +43,11 @@
 //!
 //! // Chunk a Rust file
 //! let content = std::fs::read_to_string("src/main.rs")?;
-//! let chunks = strategy.chunk_file(Path::new("src/main.rs"), &content).await?;
+//! let chunks = strategy.chunk_content(Path::new("src/main.rs"), &content)?;
 //!
 //! for chunk in chunks {
-//!     println!("Chunk: lines {}-{}", chunk.line_start, chunk.line_end);
-//!     println!("Content: {}", chunk.content);
+//!     println!("Chunk sequence: {}", chunk.sequence);
+//!     println!("Content: {}", chunk.chunk_text);
 //! }
 //! # Ok(())
 //! # }

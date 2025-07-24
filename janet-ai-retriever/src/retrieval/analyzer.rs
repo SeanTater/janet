@@ -30,7 +30,8 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use janet_ai_retriever::retrieval::analyzer::{AnalyzerTrait, BertAnalyzer, BertChunkConfig};
+//! use janet_ai_retriever::retrieval::analyzer::{AnalyzerTrait, RemoteBertChunkAnalyzer, BertChunkConfig};
+//! use janet_ai_retriever::retrieval::file_index::FileIndex;
 //! use std::path::Path;
 //!
 //! # async fn example() -> anyhow::Result<()> {
@@ -40,17 +41,16 @@
 //!     chunk_size_lines: 20,
 //!     chunk_step_lines: 15,  // 5 lines overlap
 //!     generate_embeddings: true,
-//!     max_files: None,
 //! };
 //!
-//! let analyzer = BertAnalyzer::new(config).await?;
+//! // Create a file index first (required by analyzer)
+//! let temp_dir = tempfile::tempdir()?;
+//! let file_index = FileIndex::open_memory(temp_dir.path()).await?;
+//! let analyzer = RemoteBertChunkAnalyzer::new(file_index, config);
 //!
-//! // Check if file should be processed
-//! if analyzer.should_process_file(Path::new("src/main.rs"))? {
-//!     // Analyze and chunk the file
-//!     let chunks = analyzer.analyze_file(Path::new("src/main.rs"), &file_ref).await?;
-//!     println!("Generated {} chunks", chunks.len());
-//! }
+//! // Analyze a file (processes and stores chunks automatically)
+//! analyzer.analyze(Path::new("src/main.rs")).await?;
+//! println!("File analyzed and chunks stored in index");
 //! # Ok(())
 //! # }
 //! ```
