@@ -90,8 +90,6 @@ mod test_suite {
         let versions = StatusApi::get_dependency_versions().await?;
 
         assert!(!versions.retriever_version.is_empty());
-        assert!(!versions.embed_version.is_empty());
-        assert!(!versions.context_version.is_empty());
         assert!(versions.dependencies.is_empty()); // No individual deps tracked
 
         Ok(())

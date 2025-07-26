@@ -66,10 +66,6 @@ impl EmbeddingModelMetadata {
 pub struct IndexMetadata {
     /// Version of janet-ai-retriever that created this index
     pub retriever_version: String,
-    /// Version of janet-ai-context used for chunking
-    pub context_version: String,
-    /// Version of janet-ai-embed used for embeddings
-    pub embed_version: String,
     /// Timestamp when the index was created
     pub created_at: i64,
     /// Timestamp when the index was last updated
@@ -87,8 +83,6 @@ impl IndexMetadata {
         let now = chrono::Utc::now().timestamp();
         Self {
             retriever_version: env!("CARGO_PKG_VERSION").to_string(),
-            context_version: "0.1.0".to_string(), // TODO: Get from janet-ai-context
-            embed_version: "0.1.0".to_string(),   // TODO: Get from janet-ai-embed
             created_at: now,
             updated_at: now,
             embedding_model: None,
@@ -160,8 +154,6 @@ impl EnhancedFileIndex {
                 id INTEGER PRIMARY KEY,
                 repository TEXT NOT NULL,
                 retriever_version TEXT NOT NULL,
-                context_version TEXT NOT NULL,
-                embed_version TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,
                 metadata_json TEXT,
@@ -224,20 +216,16 @@ impl EnhancedFileIndex {
         sqlx::query(
             r#"
             INSERT INTO index_metadata
-            (repository, retriever_version, context_version, embed_version, created_at, updated_at, metadata_json)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            (repository, retriever_version, created_at, updated_at, metadata_json)
+            VALUES (?1, ?2, ?3, ?4, ?5)
             ON CONFLICT(repository) DO UPDATE SET
                 retriever_version = excluded.retriever_version,
-                context_version = excluded.context_version,
-                embed_version = excluded.embed_version,
                 updated_at = excluded.updated_at,
                 metadata_json = excluded.metadata_json
             "#,
         )
         .bind(&metadata.repository)
         .bind(&metadata.retriever_version)
-        .bind(&metadata.context_version)
-        .bind(&metadata.embed_version)
         .bind(metadata.created_at)
         .bind(metadata.updated_at)
         .bind(metadata_json)
@@ -261,8 +249,6 @@ impl EnhancedFileIndex {
 
             Ok(Some(IndexMetadata {
                 retriever_version: row.get("retriever_version"),
-                context_version: row.get("context_version"),
-                embed_version: row.get("embed_version"),
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
                 embedding_model: None, // Will be populated separately if needed

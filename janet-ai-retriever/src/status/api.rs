@@ -363,8 +363,6 @@ impl StatusApi {
         // Only return actual version info we can reliably get
         Ok(DependencyVersions {
             retriever_version: env!("CARGO_PKG_VERSION").to_string(),
-            embed_version: env!("CARGO_PKG_VERSION").to_string(), // Same workspace version
-            context_version: env!("CARGO_PKG_VERSION").to_string(), // Same workspace version
             rust_version: option_env!("CARGO_PKG_RUST_VERSION")
                 .unwrap_or("unknown")
                 .to_string(),
