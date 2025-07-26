@@ -42,10 +42,15 @@ fn test_filesystem_basics() {
 async fn test_server_startup() {
     // Try to run the server with --help to see if the binary works
     let output = Command::new("cargo")
-        .args(["run", "--", "--help"])
+        .args(["run", "-p", "janet-ai-mcp", "--", "--help"])
         .output()
         .await
         .expect("Failed to run server with --help");
+
+    if !output.status.success() {
+        eprintln!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
+    }
 
     assert!(output.status.success(), "Server --help should succeed");
 }
@@ -57,7 +62,14 @@ async fn test_server_kill() {
 
     // Start server and immediately kill it
     let mut child = Command::new("cargo")
-        .args(["run", "--", "--root", temp_dir.path().to_str().unwrap()])
+        .args([
+            "run",
+            "-p",
+            "janet-ai-mcp",
+            "--",
+            "--root",
+            temp_dir.path().to_str().unwrap(),
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
