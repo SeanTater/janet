@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::retrieval::{
@@ -6,10 +7,104 @@ use crate::retrieval::{
     indexing_engine::{IndexingEngine, IndexingEngineConfig},
 };
 
-use super::{consistency::*, database::*, filesystem::*, network::*, performance::*, types::*};
+use super::{database::*, types::*};
 
 /// Main status API implementation
 pub struct StatusApi;
+
+// Consolidated types previously in separate modules
+
+/// Basic search functionality status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchPerformanceStats {
+    /// Whether search functionality is available
+    pub search_available: bool,
+}
+
+/// Basic indexing functionality status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexingPerformanceStats {
+    /// Whether indexing is operational
+    pub indexing_operational: bool,
+}
+
+/// Basic file system status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSystemStatus {
+    /// Base directory exists and is accessible
+    pub base_directory_accessible: bool,
+}
+
+/// Basic stale files information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaleFilesInfo {
+    /// Number of pending tasks in indexing queue
+    pub pending_tasks: usize,
+}
+
+/// Basic network status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkStatus {
+    /// Whether proxy is configured via environment
+    pub proxy_configured: bool,
+    /// Overall network health assumption
+    pub overall_network_health: NetworkHealth,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NetworkHealth {
+    Healthy,
+    Limited,
+    Offline,
+}
+
+/// Index consistency check results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexConsistencyReport {
+    /// Overall consistency status
+    pub overall_status: ConsistencyStatus,
+    /// Checks performed
+    pub checks_performed: Vec<ConsistencyCheck>,
+    /// Summary of issues found
+    pub issues_summary: IssuesSummary,
+    /// Timestamp when check was performed
+    pub check_timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ConsistencyStatus {
+    Healthy,
+    Warning,
+    Critical,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsistencyCheck {
+    /// Name of the check
+    pub check_name: String,
+    /// Check status
+    pub status: ConsistencyStatus,
+    /// Description of what was checked
+    pub description: String,
+    /// Number of items checked
+    pub items_checked: usize,
+    /// Number of issues found
+    pub issues_found: usize,
+    /// Details about issues (if any)
+    pub issue_details: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssuesSummary {
+    /// Total issues found
+    pub total_issues: usize,
+    /// Critical issues requiring immediate attention
+    pub critical_issues: usize,
+    /// Warning issues that should be addressed
+    pub warning_issues: usize,
+    /// Recommendations for fixing issues
+    pub recommendations: Vec<String>,
+}
 
 impl StatusApi {
     /// Get comprehensive index statistics
