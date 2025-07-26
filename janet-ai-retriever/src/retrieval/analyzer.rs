@@ -1,11 +1,7 @@
 use super::file_index::{ChunkRef, FileIndex, FileRef};
 use anyhow::Result;
-use async_trait::async_trait;
 use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider, TokenizerConfig};
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, serde::Deserialize)]
 pub struct BertChunkConfig {
@@ -33,21 +29,15 @@ impl Default for BertChunkConfig {
     }
 }
 
-/// The new trait that abstracts the analyzer.
-#[async_trait]
-pub trait AnalyzerTrait: Send + Sync {
-    async fn analyze(&self, absolute_path: &Path) -> Result<()>;
-}
-
-/// The original Analyzer implementing the trait.
-pub struct RemoteBertChunkAnalyzer {
+/// File analyzer for chunking and embedding generation
+pub struct FileAnalyzer {
     file_index: FileIndex,
     config: BertChunkConfig,
     gitignore: ignore::gitignore::Gitignore,
     embedding_provider: Option<FastEmbedProvider>,
 }
 
-impl RemoteBertChunkAnalyzer {
+impl FileAnalyzer {
     pub fn new(file_index: FileIndex, config: BertChunkConfig) -> Self {
         Self {
             gitignore: ignore::gitignore::Gitignore::new(&file_index.base).0,
@@ -175,11 +165,8 @@ impl RemoteBertChunkAnalyzer {
 
         Ok(Some(chunks))
     }
-}
 
-#[async_trait]
-impl AnalyzerTrait for RemoteBertChunkAnalyzer {
-    async fn analyze(&self, relative_path: &Path) -> Result<()> {
+    pub async fn analyze(&self, relative_path: &Path) -> Result<()> {
         tracing::info!("Indexing {}", relative_path.display());
 
         // Skip if not a file or if in gitignore
@@ -204,35 +191,6 @@ impl AnalyzerTrait for RemoteBertChunkAnalyzer {
             );
         }
 
-        Ok(())
-    }
-}
-
-/// A new mock analyzer for testing.
-/// It records every path passed to `analyze` in an internal vector.
-pub struct MockAnalyzer {
-    pub calls: Arc<Mutex<Vec<PathBuf>>>,
-}
-
-impl Default for MockAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MockAnalyzer {
-    pub fn new() -> Self {
-        Self {
-            calls: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-}
-
-#[async_trait]
-impl AnalyzerTrait for MockAnalyzer {
-    async fn analyze(&self, relative_path: &Path) -> Result<()> {
-        let mut calls = self.calls.lock().unwrap();
-        calls.push(relative_path.to_path_buf());
         Ok(())
     }
 }
