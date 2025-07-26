@@ -334,45 +334,7 @@ impl JanetMcpServer {
                                     model_info.normalized
                                 ));
 
-                                if let Some(file_size) = model_info.model_file_size_bytes {
-                                    status.push_str(&format!(
-                                        "Model File Size: {:.2} MB\n",
-                                        file_size as f64 / 1_048_576.0
-                                    ));
-                                }
-
-                                if let Some(location) = &model_info.model_file_location {
-                                    status.push_str(&format!("Model Location: {}\n", location));
-                                }
-
-                                if !model_info.supported_languages.is_empty() {
-                                    status.push_str(&format!(
-                                        "Supported Languages: {:?}\n",
-                                        model_info.supported_languages
-                                    ));
-                                }
-
-                                if let Some(onnx_info) = &model_info.onnx_runtime_info {
-                                    status.push_str(&format!(
-                                        "GPU Available: {}\n",
-                                        if onnx_info.gpu_available {
-                                            "✓"
-                                        } else {
-                                            "✗"
-                                        }
-                                    ));
-
-                                    if let Some(gpu_device) = &onnx_info.gpu_device {
-                                        status.push_str(&format!("GPU Device: {}\n", gpu_device));
-                                    }
-
-                                    if let Some(runtime_version) = &onnx_info.runtime_version {
-                                        status.push_str(&format!(
-                                            "ONNX Runtime Version: {}\n",
-                                            runtime_version
-                                        ));
-                                    }
-                                }
+                                // Simplified model info - removed untracked fields
                                 status.push('\n');
                             }
                             Ok(None) => {
@@ -487,60 +449,18 @@ impl JanetMcpServer {
         match StatusApi::get_network_status().await {
             Ok(network_status) => {
                 status.push_str(&format!(
-                    "Overall Network Health: {:?}\n\
-                    SSL Certificate Validation: {}\n",
-                    network_status.overall_network_health,
-                    if network_status.ssl_certificate_validation {
-                        "✓"
-                    } else {
-                        "✗"
-                    }
+                    "Overall Network Health: {:?}\n",
+                    network_status.overall_network_health
                 ));
 
                 status.push_str(&format!(
-                    "Model Download Connectivity: {}\n",
-                    if network_status.model_download_connectivity.is_reachable {
-                        "✓"
+                    "Proxy: {}\n",
+                    if network_status.proxy_configured {
+                        "Configured"
                     } else {
-                        "✗"
+                        "Not configured"
                     }
                 ));
-
-                if let Some(error) = &network_status.model_download_connectivity.error_message {
-                    status.push_str(&format!("  Error: {}\n", error));
-                }
-
-                if let Some(response_time) =
-                    network_status.model_download_connectivity.response_time_ms
-                {
-                    status.push_str(&format!("  Response Time: {}ms\n", response_time));
-                }
-
-                status.push_str(&format!(
-                    "Hugging Face Hub Access: {}\n",
-                    if network_status.hugging_face_hub_access.is_reachable {
-                        "✓"
-                    } else {
-                        "✗"
-                    }
-                ));
-
-                if network_status.proxy_configuration.proxy_configured {
-                    status.push_str("Proxy: Configured\n");
-                    if let Some(proxy_addr) = &network_status.proxy_configuration.proxy_address {
-                        status.push_str(&format!("  Address: {}\n", proxy_addr));
-                    }
-                    status.push_str(&format!(
-                        "  Auth: {}\n",
-                        if network_status.proxy_configuration.proxy_auth_configured {
-                            "✓"
-                        } else {
-                            "✗"
-                        }
-                    ));
-                } else {
-                    status.push_str("Proxy: Not configured\n");
-                }
             }
             Err(e) => status.push_str(&format!("⚠ Failed to get network status: {}\n", e)),
         }
@@ -551,45 +471,14 @@ impl JanetMcpServer {
         status.push_str("==================\n");
         match StatusApi::get_search_performance_stats(enhanced_index).await {
             Ok(perf_stats) => {
-                if let Some(avg_response_time) = perf_stats.average_response_time_ms {
-                    status.push_str(&format!(
-                        "Average Response Time: {:.1}ms\n",
-                        avg_response_time
-                    ));
-                }
-
-                if let Some(cache_hit_rate) = perf_stats.cache_hit_rate_percentage {
-                    status.push_str(&format!("Cache Hit Rate: {:.1}%\n", cache_hit_rate));
-                }
-
-                let quality = &perf_stats.result_quality_metrics;
-                if let Some(avg_results) = quality.average_results_count {
-                    status.push_str(&format!("Average Results Count: {:.1}\n", avg_results));
-                }
-
-                if let Some(avg_relevance) = quality.average_relevance_score {
-                    status.push_str(&format!("Average Relevance Score: {:.2}\n", avg_relevance));
-                }
-
-                if let Some(zero_results) = quality.zero_results_percentage {
-                    status.push_str(&format!("Zero Results Rate: {:.1}%\n", zero_results));
-                }
-
                 status.push_str(&format!(
-                    "Total Queries Processed: {}\n\
-                    Semantic Search Error Rate: {:.2}%\n\
-                    Text Search Error Rate: {:.2}%\n",
-                    perf_stats.error_rates.total_queries_processed,
-                    perf_stats.error_rates.semantic_search_error_rate * 100.0,
-                    perf_stats.error_rates.text_search_error_rate * 100.0
-                ));
-
-                if !perf_stats.common_query_patterns.is_empty() {
-                    status.push_str("Common Query Patterns:\n");
-                    for pattern in &perf_stats.common_query_patterns {
-                        status.push_str(&format!("  - {}\n", pattern));
+                    "Search Available: {}\n",
+                    if perf_stats.search_available {
+                        "✓"
+                    } else {
+                        "✗"
                     }
-                }
+                ));
             }
             Err(e) => status.push_str(&format!(
                 "⚠ Failed to get search performance stats: {}\n",

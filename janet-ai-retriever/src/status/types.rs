@@ -102,16 +102,8 @@ pub struct EmbeddingModelInfo {
     pub dimensions: usize,
     /// Model download status
     pub download_status: ModelDownloadStatus,
-    /// Model file size in bytes
-    pub model_file_size_bytes: Option<u64>,
-    /// Model file location
-    pub model_file_location: Option<String>,
-    /// Supported languages/domains
-    pub supported_languages: Vec<String>,
     /// Normalization settings
     pub normalized: bool,
-    /// ONNX runtime details
-    pub onnx_runtime_info: Option<OnnxRuntimeInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,12 +114,4 @@ pub enum ModelDownloadStatus {
     Failed(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OnnxRuntimeInfo {
-    /// Whether GPU acceleration is available
-    pub gpu_available: bool,
-    /// GPU device name (if available)
-    pub gpu_device: Option<String>,
-    /// ONNX runtime version
-    pub runtime_version: Option<String>,
-}
+// Removed OnnxRuntimeInfo - not tracked
