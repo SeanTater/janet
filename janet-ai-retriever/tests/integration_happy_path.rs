@@ -159,9 +159,9 @@ async fn test_task_queue_prioritization() -> Result<()> {
     }
 
     // Schedule tasks with different priorities (reverse order)
-    let _low_task = IndexingTask::index_file_background(test_files[0].clone());
-    let _high_task = IndexingTask::index_file_high_priority(test_files[1].clone());
-    let _normal_task = IndexingTask::index_file(test_files[2].clone());
+    let _background_task = IndexingTask::index_file_background(test_files[0].clone());
+    let _priority_task = IndexingTask::index_file(test_files[1].clone());
+    let _another_priority_task = IndexingTask::index_file(test_files[2].clone());
 
     engine.schedule_file_index(test_files[0].clone()).await?; // This uses normal priority by default
 

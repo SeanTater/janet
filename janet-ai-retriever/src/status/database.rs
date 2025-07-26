@@ -58,10 +58,6 @@ pub struct SqliteInfo {
 pub struct DependencyVersions {
     /// janet-ai-retriever version
     pub retriever_version: String,
-    /// janet-ai-embed version
-    pub embed_version: String,
-    /// janet-ai-context version
-    pub context_version: String,
     /// Rust version used for compilation
     pub rust_version: String,
     /// Core dependency versions

@@ -423,13 +423,8 @@ impl JanetMcpServer {
             Ok(versions) => {
                 status.push_str(&format!(
                     "Retriever Version: {}\n\
-                    Embed Version: {}\n\
-                    Context Version: {}\n\
                     Rust Version: {}\n",
-                    versions.retriever_version,
-                    versions.embed_version,
-                    versions.context_version,
-                    versions.rust_version
+                    versions.retriever_version, versions.rust_version
                 ));
 
                 if !versions.dependencies.is_empty() {

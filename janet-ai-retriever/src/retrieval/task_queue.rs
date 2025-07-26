@@ -9,19 +9,15 @@ use tracing::{debug, warn};
 /// Priority levels for indexing tasks
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TaskPriority {
-    /// Background tasks (e.g., routine file indexing)
+    /// Background tasks (e.g., bulk reindexing, routine processing)
     Background = 0,
-    /// Normal priority tasks (e.g., file changes detected)
-    Normal = 1,
-    /// High priority tasks (e.g., recently modified files, user-triggered reindex)
-    High = 2,
-    /// Critical tasks (e.g., dependency files, configuration changes)
-    Critical = 3,
+    /// Priority tasks (e.g., file changes, user requests, file removals)
+    Priority = 1,
 }
 
 impl Default for TaskPriority {
     fn default() -> Self {
-        Self::Normal
+        Self::Priority
     }
 }
 
@@ -57,14 +53,9 @@ impl IndexingTask {
         }
     }
 
-    /// Create a high-priority task for indexing a single file
-    pub fn index_file_high_priority(path: PathBuf) -> Self {
-        Self::new(TaskType::IndexFile { path }, TaskPriority::High)
-    }
-
-    /// Create a normal-priority task for indexing a single file
+    /// Create a priority task for indexing a single file
     pub fn index_file(path: PathBuf) -> Self {
-        Self::new(TaskType::IndexFile { path }, TaskPriority::Normal)
+        Self::new(TaskType::IndexFile { path }, TaskPriority::Priority)
     }
 
     /// Create a background task for indexing a single file
@@ -74,7 +65,7 @@ impl IndexingTask {
 
     /// Create a task for removing a file from the index
     pub fn remove_file(path: PathBuf) -> Self {
-        Self::new(TaskType::RemoveFile { path }, TaskPriority::High)
+        Self::new(TaskType::RemoveFile { path }, TaskPriority::Priority)
     }
 
     /// Get the age of this task in seconds
@@ -324,20 +315,20 @@ mod tests {
 
     #[test]
     fn test_task_priority_ordering() {
-        let low = PriorityTask::new(IndexingTask::new(
+        let background = PriorityTask::new(IndexingTask::new(
             TaskType::IndexFile {
                 path: PathBuf::from("test"),
             },
             TaskPriority::Background,
         ));
-        let high = PriorityTask::new(IndexingTask::new(
+        let priority = PriorityTask::new(IndexingTask::new(
             TaskType::IndexFile {
                 path: PathBuf::from("test"),
             },
-            TaskPriority::Critical,
+            TaskPriority::Priority,
         ));
 
-        assert!(high > low);
+        assert!(priority > background);
     }
 
     #[tokio::test]
@@ -350,7 +341,7 @@ mod tests {
 
         // Submit some tasks
         let task1 = IndexingTask::index_file_background(PathBuf::from("file1.txt"));
-        let task2 = IndexingTask::index_file_high_priority(PathBuf::from("file2.txt"));
+        let task2 = IndexingTask::index_file(PathBuf::from("file2.txt"));
         let task3 = IndexingTask::index_file(PathBuf::from("file3.txt"));
 
         queue.submit_task(task1).await.unwrap();
@@ -360,13 +351,12 @@ mod tests {
         // Give processor time to process
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // High priority task should come first
+        // Priority tasks should come first (in any order since they have same priority)
         let next_task = queue.pop_task().await.unwrap();
-        assert_eq!(next_task.priority, TaskPriority::High);
+        assert_eq!(next_task.priority, TaskPriority::Priority);
 
-        // Normal priority comes next
         let next_task = queue.pop_task().await.unwrap();
-        assert_eq!(next_task.priority, TaskPriority::Normal);
+        assert_eq!(next_task.priority, TaskPriority::Priority);
 
         // Background priority comes last
         let next_task = queue.pop_task().await.unwrap();
@@ -395,12 +385,8 @@ mod tests {
     #[test]
     fn test_task_priority_parsing() {
         assert_eq!(TaskPriority::Background as u8, 0);
-        assert_eq!(TaskPriority::Normal as u8, 1);
-        assert_eq!(TaskPriority::High as u8, 2);
-        assert_eq!(TaskPriority::Critical as u8, 3);
+        assert_eq!(TaskPriority::Priority as u8, 1);
 
-        assert!(TaskPriority::Critical > TaskPriority::High);
-        assert!(TaskPriority::High > TaskPriority::Normal);
-        assert!(TaskPriority::Normal > TaskPriority::Background);
+        assert!(TaskPriority::Priority > TaskPriority::Background);
     }
 }
