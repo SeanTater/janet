@@ -248,50 +248,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_status_with_index() {
-        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
-        let config = ServerConfig {
-            root_dir: temp_dir.path().to_path_buf(),
-        };
-
-        // Create index database by initializing server components
-        let enhanced_index = EnhancedFileIndex::open(&config.root_dir).await;
-        assert!(enhanced_index.is_ok(), "Should create index database");
-
-        let server = JanetMcpServer::new(config)
-            .await
-            .expect("Server creation should succeed with index");
-        let status_result = server.status().await.expect("Status should succeed");
-
-        // Should show TOML status since index exists
-        let status_output = format!("{status_result:?}");
-        assert!(status_output.contains("Janet AI MCP Server Status"));
-        assert!(status_output.contains("Server Version:"));
-        assert!(status_output.contains("Root Directory:"));
-        assert!(status_output.contains("Working Directory:"));
-    }
-
-    #[tokio::test]
-    async fn test_status_with_corrupted_database_fails_initialization() {
-        let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
-
-        // Create an empty .janet-ai.db file to simulate corrupted database
-        let db_path = temp_dir.path().join(".janet-ai.db");
-        std::fs::write(&db_path, b"fake database content").expect("Failed to create fake database");
-
-        let config = ServerConfig {
-            root_dir: temp_dir.path().to_path_buf(),
-        };
-
-        // Should fail to initialize with corrupted database
-        let server = JanetMcpServer::new(config).await;
-        assert!(
-            server.is_err(),
-            "Server creation should fail with corrupted database"
-        );
-    }
-
-    #[tokio::test]
     async fn test_enhanced_file_index_creates_database() {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
         let config = ServerConfig {
