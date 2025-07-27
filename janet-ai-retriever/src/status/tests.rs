@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod test_suite {
-    use super::super::api::StatusApi;
-    use super::super::{
-        consistency::ConsistencyStatus, network::NetworkHealth, types::HealthStatus,
-    };
+    use super::super::api::{ConsistencyStatus, NetworkHealth, StatusApi};
+    use super::super::types::HealthStatus;
     use crate::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
     use anyhow::Result;
     use tempfile::tempdir;

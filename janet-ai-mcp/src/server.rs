@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+use std::sync::Arc;
+
 // Much of the code is used by the MCP server tools, which foul the static analysis
 use crate::ServerConfig;
 use crate::tools::{
@@ -14,13 +16,13 @@ use janet_ai_retriever::{
 };
 use rmcp::handler::server::tool::Parameters;
 use rmcp::model::{Implementation, ProtocolVersion, ServerCapabilities};
-use rmcp::tool_handler;
 use rmcp::{
     ErrorData as McpError, ServerHandler, ServiceExt,
     handler::server::tool::ToolRouter,
     model::{CallToolResult, Content, ServerInfo},
 };
 use tokio::io::{stdin, stdout};
+use tokio::sync::Mutex;
 use tracing::info;
 
 /// Janet MCP Server that provides search capabilities across codebases.
@@ -41,12 +43,13 @@ use tracing::info;
 ///                                        ↓
 ///                                 EnhancedFileIndex
 /// ```
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct JanetMcpServer {
     config: ServerConfig,
     enhanced_index: EnhancedFileIndex,
-    indexing_engine: IndexingEngine,
+    indexing_engine: Arc<Mutex<IndexingEngine>>,
     indexing_config: IndexingEngineConfig,
+    tool_router: ToolRouter<Self>,
 }
 
 #[rmcp::tool_router]
@@ -104,8 +107,9 @@ impl JanetMcpServer {
         Ok(Self {
             config,
             enhanced_index,
-            indexing_engine,
+            indexing_engine: Arc::new(Mutex::new(indexing_engine)),
             indexing_config,
+            tool_router: Self::tool_router(),
         })
     }
 
@@ -116,36 +120,21 @@ impl JanetMcpServer {
     async fn status(&self) -> Result<CallToolResult, McpError> {
         info!("Processing comprehensive status request");
 
-        let mut status = format!(
-            "Janet AI MCP Server Status\n\
-            ================================\n\
-            Server Version: {}\n\
-            Root Directory: {:?}\n\
-            Working Directory: {:?}\n\n",
-            env!("CARGO_PKG_VERSION"),
-            self.config.root_dir,
-            std::env::current_dir().unwrap_or_else(|_| "<unknown>".into())
-        );
-
         // Get comprehensive status from StatusApi
-        let status_result = match StatusApi::get_comprehensive_status(
+        let status_result = StatusApi::get_comprehensive_status(
             &self.enhanced_index,
-            &self.indexing_engine,
+            &*self.indexing_engine.lock().await,
             &self.indexing_config,
             &self.config.root_dir,
         )
         .await
-        {
-            Ok(status) => match status.to_toml() {
-                Ok(toml_output) => toml_output,
-                Err(e) => format!("⚠ Failed to serialize status to TOML: {e}"),
-            },
-            Err(e) => format!("⚠ Failed to get status: {e}"),
-        };
+        .map_err(|err| McpError::internal_error(format!("Failed to get status: {err}"), None))?
+        .to_toml()
+        .map_err(|err| {
+            McpError::internal_error(format!("Failed to serialize status to TOML: {err}"), None)
+        })?;
 
-        status.push_str(&status_result);
-
-        Ok(CallToolResult::success(vec![Content::text(status)]))
+        Ok(CallToolResult::success(vec![Content::text(status_result)]))
     }
 
     /// Regex search tool - search project files, dependencies, and docs
@@ -218,7 +207,7 @@ impl JanetMcpServer {
     }
 }
 
-#[tool_handler]
+#[rmcp::tool_handler]
 impl ServerHandler for JanetMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
@@ -275,7 +264,7 @@ mod tests {
         let status_result = server.status().await.expect("Status should succeed");
 
         // Should show TOML status since index exists
-        let status_output = format!("{:?}", status_result);
+        let status_output = format!("{status_result:?}");
         assert!(status_output.contains("Janet AI MCP Server Status"));
         assert!(status_output.contains("Server Version:"));
         assert!(status_output.contains("Root Directory:"));
