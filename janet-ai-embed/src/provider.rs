@@ -70,6 +70,7 @@ pub trait EmbeddingProvider: Send + Sync {
 }
 
 /// FastEmbed-based embedding provider using real ONNX models
+#[derive(Clone)]
 pub struct FastEmbedProvider {
     config: EmbedConfig,
     model: Option<Arc<Mutex<TextEmbedding>>>,

@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "janet-ai-mcp": {
+      "type": "stdio",
+      "command": "/home/sean-gallagher/sandbox/janet/target/debug/janet-ai-mcp",
+      "args": [
+        "--root",
+        "."
+      ],
+      "env": {}
+    }
+  }
+}

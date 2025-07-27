@@ -202,8 +202,19 @@ impl IndexingEngine {
         info!("Started {} indexing workers", self.config.max_workers);
 
         // Perform initial index if needed
-        if self.config.mode == IndexingMode::FullReindex {
-            self.schedule_full_reindex().await?;
+        match self.config.mode {
+            IndexingMode::FullReindex => {
+                self.schedule_full_reindex().await?;
+            }
+            IndexingMode::ContinuousMonitoring => {
+                // Check if index is empty and do initial scan if needed
+                let stats = self.enhanced_index.get_index_stats().await?;
+                if stats.files_count == 0 {
+                    info!("Index is empty, performing initial scan...");
+                    self.schedule_full_reindex().await?;
+                }
+            }
+            IndexingMode::ReadOnly => {}
         }
 
         Ok(())
