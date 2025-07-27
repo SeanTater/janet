@@ -971,6 +971,10 @@ impl IndexingEngine {
     pub async fn shutdown(&mut self) -> Result<()> {
         info!("Shutting down IndexingEngine");
 
+        if !self.started_for_indexing {
+            return Ok(());
+        }
+
         // Send shutdown signal to workers
         if let Some(sender) = self.shutdown_sender.take() {
             let _ = sender.send(());
