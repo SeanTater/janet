@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use half::f16;
+use janet_ai_embed::{EmbedConfig, TokenizerConfig};
 use janet_ai_retriever::{
     retrieval::{
         file_index::FileIndex,
@@ -11,6 +12,7 @@ use janet_ai_retriever::{
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process;
+use tempfile::tempdir;
 use tokio::time::Duration;
 
 /// A CLI tool to interact with the janet-ai-retriever chunk database.
@@ -40,6 +42,9 @@ enum Commands {
         /// Chunk size in characters
         #[arg(long, default_value_t = 1000)]
         chunk_size: usize,
+        /// Embedding model to use for semantic search
+        #[arg(long, default_value = "snowflake-arctic-embed-xs")]
+        embedding_model: String,
         /// Force full reindex (ignore existing chunks)
         #[arg(long)]
         force: bool,
@@ -158,6 +163,7 @@ async fn run() -> anyhow::Result<()> {
             repo,
             max_workers,
             chunk_size,
+            embedding_model,
             force,
         } => {
             let repo_path = repo.unwrap_or_else(|| args.base_dir.clone());
@@ -167,7 +173,20 @@ async fn run() -> anyhow::Result<()> {
             println!("   Database: {}/.janet-ai.db", args.base_dir.display());
             println!("   Max workers: {max_workers}");
             println!("   Chunk size: {chunk_size}");
+            println!("   Embedding model: {embedding_model}");
             println!("   Force reindex: {force}");
+
+            // Set up embedding configuration
+            let embedding_temp_dir = tempdir()?;
+            let model_dir = embedding_temp_dir.path().join(&embedding_model);
+            let tokenizer_config = TokenizerConfig::standard(&model_dir);
+            let embed_config = EmbedConfig::new(
+                embedding_temp_dir.path(),
+                &embedding_model,
+                tokenizer_config,
+            )
+            .with_batch_size(8)
+            .with_normalize(true);
 
             // Set up the indexing engine configuration
             let indexing_config =
@@ -178,7 +197,8 @@ async fn run() -> anyhow::Result<()> {
                         IndexingMode::ContinuousMonitoring
                     })
                     .with_max_workers(max_workers)
-                    .with_chunk_size(chunk_size);
+                    .with_chunk_size(chunk_size)
+                    .with_embedding_config(embed_config);
 
             println!("⚙️  Initializing IndexingEngine...");
 

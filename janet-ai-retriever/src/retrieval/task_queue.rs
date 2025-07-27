@@ -179,6 +179,7 @@ impl Default for TaskQueueConfig {
 }
 
 /// A priority-based task queue for managing indexing operations
+#[derive(Clone)]
 pub struct TaskQueue {
     config: TaskQueueConfig,
     queue: Arc<Mutex<BinaryHeap<PriorityTask>>>,
