@@ -7,7 +7,6 @@ publish = false
 [dependencies]
 anyhow = "1.0.97"
 async-trait = "0.1.88"
-derive_builder = "0.20"
 fastembed = "5.0.0"
 fnv = "1.0"
 half = { version = "2.4.1", features = ["bytemuck"] }

@@ -335,8 +335,7 @@ impl IndexingEngine {
         // Mark as started for indexing
         self.started_for_indexing = true;
 
-        // Start task queue processor
-        self.task_queue.start_processor().await;
+        // Task queue with flume doesn't need explicit processor startup
 
         // Create shutdown channel
         let (shutdown_sender, _shutdown_receiver) = mpsc::unbounded_channel();
@@ -378,7 +377,7 @@ impl IndexingEngine {
         let max_tasks_per_batch = 100; // Safety limit to prevent infinite loops
         let mut tasks_processed = 0;
 
-        while let Some(task) = self.task_queue.pop_task().await {
+        while let Ok(task) = self.task_queue.try_recv_task() {
             let result = self.process_task_internal(&task).await;
 
             match result {
@@ -631,7 +630,6 @@ impl IndexingEngine {
                         if let Err(e) = self
                             .task_queue
                             .submit_tasks(std::mem::take(&mut tasks_batch))
-                            .await
                         {
                             warn!("Failed to submit batch of tasks: {}", e);
                         }
@@ -645,7 +643,7 @@ impl IndexingEngine {
 
         // Submit any remaining tasks in the final batch
         if !tasks_batch.is_empty() {
-            if let Err(e) = self.task_queue.submit_tasks(tasks_batch).await {
+            if let Err(e) = self.task_queue.submit_tasks(tasks_batch) {
                 warn!("Failed to submit final batch of tasks: {}", e);
             }
         }
@@ -686,7 +684,6 @@ impl IndexingEngine {
         let task = IndexingTask::index_file(file_path);
         self.task_queue
             .submit_task(task)
-            .await
             .map_err(|e| anyhow::anyhow!("Failed to schedule file index: {}", e))
     }
 
@@ -730,7 +727,7 @@ impl IndexingEngine {
     ///
     /// # Example
     pub async fn get_queue_size(&self) -> usize {
-        self.task_queue.queue_size().await
+        self.task_queue.queue_size()
     }
 
     /// Get a reference to the enhanced file index for performing searches.
@@ -781,8 +778,7 @@ impl IndexingEngine {
             let _ = worker.await;
         }
 
-        // Shutdown task queue
-        self.task_queue.shutdown().await;
+        // Flume channels shut down automatically when dropped
 
         info!("IndexingEngine shutdown complete");
         Ok(())
@@ -866,15 +862,12 @@ mod tests {
         let mut engine = IndexingEngine::new_memory(config).await?;
         engine.start(true).await?;
 
-        // Get initial queue size (should be 0)
-        let initial_queue_size = engine.task_queue.queue_size().await;
-        assert_eq!(initial_queue_size, 0);
-
-        // Give some time for the full reindex to schedule tasks
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        // With flume, tasks are immediately available after start(true)
+        // Give some time for the full reindex to complete
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Check that individual file tasks were scheduled
-        let final_queue_size = engine.task_queue.queue_size().await;
+        let final_queue_size = engine.task_queue.queue_size();
 
         // We should have at least 6 tasks (the 6 indexable files we created)
         // Note: We expect 6 files because:

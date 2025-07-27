@@ -64,8 +64,8 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let config = EmbedConfig::default_with_path(temp_dir.path());
 
-        assert_eq!(config.model_name, "snowflake-arctic-embed-xs");
-        assert!(!config.is_huggingface_model());
+        assert_eq!(config.model_name, "ModernBERT-large");
+        assert!(config.is_huggingface_model());
 
         // Test ModernBERT config
         let modernbert_config = EmbedConfig::modernbert_large(temp_dir.path());
