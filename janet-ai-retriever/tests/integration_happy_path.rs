@@ -10,7 +10,6 @@
 use anyhow::Result;
 use janet_ai_retriever::retrieval::{
     indexing_engine::{IndexingEngine, IndexingEngineConfig},
-    indexing_mode::IndexingMode,
     task_queue::IndexingTask,
 };
 use std::path::Path;
@@ -22,31 +21,21 @@ use tokio::time::Duration;
 async fn test_indexing_engine_creation() -> Result<()> {
     let temp_dir = tempdir()?;
 
-    // Test different indexing modes
-    let modes = vec![
-        IndexingMode::ReadOnly,
-        IndexingMode::ContinuousMonitoring,
-        IndexingMode::FullReindex,
-    ];
+    // Test engine creation with default configuration
+    let config = IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
+        .with_max_workers(2)
+        .with_chunk_size(1000);
 
-    for mode in modes {
-        let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(mode)
-                .with_max_workers(2)
-                .with_chunk_size(1000);
+    let engine = IndexingEngine::new_memory(config).await?;
 
-        let engine = IndexingEngine::new_memory(config).await?;
+    // Verify basic properties
+    let stats = engine.get_index_stats().await?;
+    assert_eq!(stats.files_count, 0);
+    assert_eq!(stats.chunks_count, 0);
 
-        // Verify basic properties
-        let stats = engine.get_index_stats().await?;
-        assert_eq!(stats.files_count, 0);
-        assert_eq!(stats.chunks_count, 0);
-
-        // Test queue is initially empty
-        let queue_size = engine.get_queue_size().await;
-        assert_eq!(queue_size, 0);
-    }
+    // Test queue is initially empty
+    let queue_size = engine.get_queue_size().await;
+    assert_eq!(queue_size, 0);
 
     Ok(())
 }
@@ -61,12 +50,11 @@ async fn test_file_indexing_without_embeddings() -> Result<()> {
     create_test_files(&repo_path).await?;
 
     let config = IndexingEngineConfig::new("test-repo".to_string(), repo_path)
-        .with_mode(IndexingMode::FullReindex)
         .with_max_workers(1)
         .with_chunk_size(500);
 
     let mut engine = IndexingEngine::new_memory(config).await?;
-    engine.start().await?;
+    engine.start(true).await?;
 
     // Wait for indexing to complete
     let mut attempts = 0;
@@ -141,11 +129,10 @@ async fn test_task_queue_prioritization() -> Result<()> {
     let temp_dir = tempdir()?;
 
     let config = IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-        .with_mode(IndexingMode::ContinuousMonitoring)
         .with_max_workers(1);
 
     let mut engine = IndexingEngine::new_memory(config).await?;
-    engine.start().await?;
+    engine.start(false).await?;
 
     // Create test files
     let test_files = vec![
@@ -182,12 +169,11 @@ async fn test_continuous_monitoring() -> Result<()> {
     let temp_dir = tempdir()?;
     let repo_path = temp_dir.path().to_path_buf();
 
-    let config = IndexingEngineConfig::new("test-repo".to_string(), repo_path.clone())
-        .with_mode(IndexingMode::ContinuousMonitoring)
-        .with_max_workers(1);
+    let config =
+        IndexingEngineConfig::new("test-repo".to_string(), repo_path.clone()).with_max_workers(1);
 
     let mut engine = IndexingEngine::new_memory(config).await?;
-    engine.start().await?;
+    engine.start(false).await?;
 
     // Create an initial file
     let test_file = repo_path.join("initial.rs");
@@ -225,15 +211,11 @@ async fn test_continuous_monitoring() -> Result<()> {
 async fn test_read_only_mode() -> Result<()> {
     let temp_dir = tempdir()?;
 
-    let config = IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-        .with_mode(IndexingMode::ReadOnly);
+    let config = IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
     let mut engine = IndexingEngine::new_memory(config).await?;
 
-    // Start with timeout
-    tokio::time::timeout(Duration::from_secs(5), engine.start())
-        .await
-        .map_err(|_| anyhow::anyhow!("Engine start timed out"))??;
+    // Engine starts in read-only mode by default - no need to call start()
 
     // Try to schedule a file for indexing (should fail)
     let test_file = temp_dir.path().join("test.rs");
@@ -266,11 +248,10 @@ async fn test_chunk_creation() -> Result<()> {
     let temp_dir = tempdir()?;
 
     let config = IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-        .with_mode(IndexingMode::ContinuousMonitoring)
         .with_chunk_size(100); // Small chunks for testing
 
     let mut engine = IndexingEngine::new_memory(config).await?;
-    engine.start().await?;
+    engine.start(false).await?;
 
     // Create a large file that should be split into multiple chunks
     let large_content = (0..50).fold(String::new(), |mut acc, i| {
@@ -320,11 +301,10 @@ async fn test_chunk_creation() -> Result<()> {
 async fn test_error_handling() -> Result<()> {
     let temp_dir = tempdir()?;
 
-    let config = IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-        .with_mode(IndexingMode::ContinuousMonitoring);
+    let config = IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
     let mut engine = IndexingEngine::new_memory(config).await?;
-    engine.start().await?;
+    engine.start(false).await?;
 
     // Try to index a non-existent file
     let nonexistent_file = temp_dir.path().join("does_not_exist.rs");
@@ -474,12 +454,6 @@ To use this repository:
 
 Here's how to use the add function:
 
-```rust
-use mylib::add;
-
-let result = add(2, 3);
-println!("Result: {}", result);
-```
 
 And here's a Python example:
 

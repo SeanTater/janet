@@ -5,10 +5,7 @@
 
 use anyhow::Result;
 use janet_ai_embed::EmbedConfig;
-use janet_ai_retriever::retrieval::{
-    indexing_engine::{IndexingEngine, IndexingEngineConfig},
-    indexing_mode::IndexingMode,
-};
+use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
 use tempfile::tempdir;
 use tokio::time::Duration;
 
@@ -43,7 +40,6 @@ async fn main() -> Result<()> {
     // Set up the indexing engine WITH embeddings
     let indexing_config =
         IndexingEngineConfig::new("semantic-demo-repo".to_string(), repo_path.clone())
-            .with_mode(IndexingMode::FullReindex)
             .with_max_workers(1)
             .with_chunk_size(300)
             .with_embedding_config(embed_config); // Enable embeddings!
@@ -57,7 +53,7 @@ async fn main() -> Result<()> {
 
     // Start the engine and perform full reindex
     println!("🔄 Starting full reindex with embedding generation...");
-    engine.start().await?;
+    engine.start(true).await?;
 
     // Wait for indexing to complete
     let mut attempts = 0;

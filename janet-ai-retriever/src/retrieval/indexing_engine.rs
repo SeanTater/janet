@@ -1,3 +1,55 @@
+//! High-level indexing engine that orchestrates the complete indexing pipeline.
+//!
+//! This module provides the main orchestration layer for janet-ai-retriever, coordinating
+//! file discovery, chunking, embedding generation, and storage. It manages the entire
+//! indexing workflow from raw files to searchable chunks with embeddings.
+//!
+//! ## Key Components
+//!
+//! - **IndexingEngine**: Main orchestrator for the indexing pipeline
+//! - **IndexingEngineConfig**: Configuration for indexing behavior and resources
+//! - **IndexingStats**: Runtime statistics about indexing progress
+//!
+//! ## Pipeline Flow
+//!
+//! ```text
+//! Files → Analyzer → ChunkingStrategy → Embeddings → EnhancedFileIndex
+//!   ↑         ↑            ↑               ↑              ↑
+//!   |    FileScanner   TextContextBuilder  FastEmbed   SQLite Storage
+//!   |         |            |               |              |
+//! DirectoryWatcher → TaskQueue → EmbeddingProvider → IndexMetadata
+//! ```
+//!
+//! ## Features
+//!
+//! ### Indexing Modes
+//! By default, the engine starts in read-only mode. Call `start(full_reindex)` to begin indexing:
+//! - `start(true)`: Complete rebuild of the index followed by continuous monitoring
+//! - `start(false)`: Continuous monitoring of file changes only
+//!
+//! ### Async Task Processing
+//! - Configurable worker pools for parallel processing
+//! - Priority-based task queuing
+//! - Graceful error handling and retry logic
+//!
+//! ### Resource Management
+//! - Configurable memory limits for embedding models
+//! - Batch processing for efficient embedding generation
+//! - Connection pooling for database operations
+//!
+//! ## Usage
+//!
+//! ### Basic Indexing
+//!
+//! ### Read-Only Access
+//!
+//! ## Performance Considerations
+//!
+//! - **Worker Count**: More workers = faster processing but higher memory usage
+//! - **Chunk Size**: Smaller chunks = better search granularity but more storage
+//! - **Batch Size**: Larger batches = more efficient embedding but higher memory peaks
+//! - **Embedding Models**: Smaller models = faster processing but potentially lower quality
+
 use anyhow::Result;
 use blake3;
 use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider};
@@ -9,7 +61,6 @@ use tracing::{debug, error, info, warn};
 use super::chunking_strategy::{ChunkingConfig, ChunkingStrategy};
 use super::enhanced_index::{EmbeddingModelMetadata, EnhancedFileIndex, IndexMetadata, IndexStats};
 use super::file_index::{ChunkRef, FileRef};
-use super::indexing_mode::IndexingMode;
 use super::task_queue::{IndexingTask, TaskQueue, TaskQueueConfig, TaskType};
 
 /// Configuration for the indexing engine
@@ -19,8 +70,6 @@ pub struct IndexingEngineConfig {
     pub repository: String,
     /// Base path for indexing
     pub base_path: PathBuf,
-    /// Indexing mode
-    pub mode: IndexingMode,
     /// Task queue configuration
     pub task_queue_config: TaskQueueConfig,
     /// Chunking configuration
@@ -34,12 +83,28 @@ pub struct IndexingEngineConfig {
 }
 
 impl IndexingEngineConfig {
+    /// Create a new indexing engine configuration.
+    ///
+    /// This creates a configuration with sensible defaults for most use cases.
+    /// You can customize the configuration using the builder methods.
+    ///
+    /// # Arguments
+    /// * `repository` - Name of the repository being indexed (used for identification)
+    /// * `base_path` - Root directory containing files to index
+    ///
+    /// # Returns
+    /// A new configuration with default settings:
+    /// - 4 worker threads
+    /// - No embedding generation (text search only)
+    /// - 60 second timeout per file
+    /// - Default chunking strategy
+    ///
+    /// # Example
     pub fn new(repository: String, base_path: PathBuf) -> Self {
         Self {
             chunking_config: ChunkingConfig::new(repository.clone()),
             repository,
             base_path,
-            mode: IndexingMode::default(),
             task_queue_config: TaskQueueConfig::default(),
             embedding_config: None,
             max_workers: 4,
@@ -47,22 +112,55 @@ impl IndexingEngineConfig {
         }
     }
 
-    pub fn with_mode(mut self, mode: IndexingMode) -> Self {
-        self.mode = mode;
-        self
-    }
-
+    /// Enable embedding generation with the specified configuration.
+    ///
+    /// When embeddings are enabled, the indexing engine will generate vector
+    /// embeddings for each text chunk, enabling semantic similarity search.
+    /// Without embeddings, only text-based search is available.
+    ///
+    /// # Arguments
+    /// * `config` - Embedding configuration specifying model and parameters
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
     pub fn with_embedding_config(mut self, config: EmbedConfig) -> Self {
         self.embedding_config = Some(config);
         self
     }
 
+    /// Set the maximum number of worker threads for parallel processing.
+    ///
+    /// More workers can speed up indexing but use more CPU and memory.
+    /// The optimal number depends on your system and the types of files being indexed.
+    ///
+    /// # Arguments
+    /// * `workers` - Number of worker threads (recommended: number of CPU cores)
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
     pub fn with_max_workers(mut self, workers: usize) -> Self {
         self.max_workers = workers;
         self.task_queue_config.max_workers = workers;
         self
     }
 
+    /// Set the maximum size for text chunks in characters.
+    ///
+    /// Smaller chunks provide more granular search results but may lose context.
+    /// Larger chunks preserve more context but may be less precise for search.
+    /// The optimal size depends on your use case and content type.
+    ///
+    /// # Arguments
+    /// * `size` - Maximum chunk size in characters (recommended: 500-2000)
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
     pub fn with_chunk_size(mut self, size: usize) -> Self {
         self.chunking_config = self.chunking_config.with_max_chunk_size(size);
         self
@@ -79,6 +177,7 @@ pub struct FileProcessingResult {
 }
 
 /// The main indexing engine that orchestrates file watching, chunking, and embedding
+#[derive(Debug)]
 pub struct IndexingEngine {
     config: IndexingEngineConfig,
     enhanced_index: EnhancedFileIndex,
@@ -89,6 +188,7 @@ pub struct IndexingEngine {
     workers: Vec<tokio::task::JoinHandle<()>>,
     shutdown_sender: Option<mpsc::UnboundedSender<()>>,
     stats: RwLock<ProcessingStats>,
+    started_for_indexing: bool,
 }
 
 #[derive(Debug, Default)]
@@ -100,12 +200,42 @@ pub struct ProcessingStats {
 }
 
 impl IndexingEngine {
-    /// Create a new indexing engine
+    /// Create a new indexing engine with the specified configuration.
+    ///
+    /// This initializes the indexing engine with a persistent SQLite database.
+    /// The engine starts in read-only mode - call [`start`](Self::start) to begin indexing.
+    ///
+    /// # Arguments
+    /// * `config` - Configuration specifying repository, paths, and indexing options
+    ///
+    /// # Returns
+    /// A new indexing engine ready for read-only operations
+    ///
+    /// # Errors
+    /// - Database initialization errors
+    /// - File system permission errors
+    /// - Configuration validation errors
+    ///
+    /// # Example
     pub async fn new(config: IndexingEngineConfig) -> Result<Self> {
         Self::new_impl(config, false).await
     }
 
-    /// Create a new indexing engine with in-memory database (for testing)
+    /// Create a new indexing engine with an in-memory database.
+    ///
+    /// This is primarily intended for testing and development. The database
+    /// will be lost when the engine is dropped. For production use, prefer [`new`](Self::new).
+    ///
+    /// # Arguments
+    /// * `config` - Configuration specifying repository, paths, and indexing options
+    ///
+    /// # Returns
+    /// A new indexing engine with an in-memory database
+    ///
+    /// # Errors
+    /// Same as [`new`](Self::new) but without persistent storage errors
+    ///
+    /// # Example
     pub async fn new_memory(config: IndexingEngineConfig) -> Result<Self> {
         Self::new_impl(config, true).await
     }
@@ -129,28 +259,23 @@ impl IndexingEngine {
         // Initialize embedding provider if configured
         let (embedding_provider, embedding_model_metadata) =
             if let Some(embed_config) = &config.embedding_config {
-                if config.mode.allows_indexing() {
-                    info!(
-                        "Initializing embedding provider: {}",
-                        embed_config.model_name
-                    );
+                info!(
+                    "Initializing embedding provider: {}",
+                    embed_config.model_name
+                );
 
-                    let provider = FastEmbedProvider::create(embed_config.clone()).await?;
-                    let metadata = EmbeddingModelMetadata::new(
-                        embed_config.model_name.clone(),
-                        "fastembed".to_string(),
-                        provider.embedding_dimension(),
-                    )
-                    .with_normalized(embed_config.normalize);
+                let provider = FastEmbedProvider::create(embed_config.clone()).await?;
+                let metadata = EmbeddingModelMetadata::new(
+                    embed_config.model_name.clone(),
+                    "fastembed".to_string(),
+                    provider.embedding_dimension(),
+                )
+                .with_normalized(embed_config.normalize);
 
-                    // Register the model in the database
-                    enhanced_index.register_embedding_model(&metadata).await?;
+                // Register the model in the database
+                enhanced_index.register_embedding_model(&metadata).await?;
 
-                    (Some(provider), Some(metadata))
-                } else {
-                    info!("Read-only mode: skipping embedding provider initialization");
-                    (None, None)
-                }
+                (Some(provider), Some(metadata))
             } else {
                 info!("No embedding configuration provided");
                 (None, None)
@@ -176,17 +301,39 @@ impl IndexingEngine {
             workers: Vec::new(),
             shutdown_sender: None,
             stats: RwLock::new(ProcessingStats::default()),
+            started_for_indexing: false,
         })
     }
 
-    /// Start the indexing engine
-    pub async fn start(&mut self) -> Result<()> {
-        info!("Starting IndexingEngine in mode: {}", self.config.mode);
+    /// Start the indexing engine for active indexing operations.
+    ///
+    /// This transitions the engine from read-only mode to active indexing mode,
+    /// enabling file monitoring, task processing, and index updates. The engine
+    /// must be started before calling methods like [`schedule_file_index`](Self::schedule_file_index)
+    /// or [`schedule_full_reindex`](Self::schedule_full_reindex).
+    ///
+    /// # Arguments
+    /// * `full_reindex` - Whether to perform a complete reindex of all files
+    ///   - `true`: Rebuild the entire index, then start continuous monitoring
+    ///   - `false`: Start continuous monitoring without rebuilding existing index
+    ///
+    /// # Returns
+    /// `Ok(())` if the engine started successfully
+    ///
+    /// # Errors
+    /// - Task queue initialization errors
+    /// - File system errors during initial indexing
+    /// - Database errors
+    ///
+    /// # Example
+    pub async fn start(&mut self, full_reindex: bool) -> Result<()> {
+        info!(
+            "Starting IndexingEngine with full_reindex: {}",
+            full_reindex
+        );
 
-        if !self.config.mode.allows_indexing() {
-            info!("Read-only mode: indexing workers will not be started");
-            return Ok(());
-        }
+        // Mark as started for indexing
+        self.started_for_indexing = true;
 
         // Start task queue processor
         self.task_queue.start_processor().await;
@@ -202,26 +349,31 @@ impl IndexingEngine {
         info!("Started {} indexing workers", self.config.max_workers);
 
         // Perform initial index if needed
-        match self.config.mode {
-            IndexingMode::FullReindex => {
-                self.schedule_full_reindex().await?;
-            }
-            IndexingMode::ContinuousMonitoring => {
-                // Check if index is empty and do initial scan if needed
-                let stats = self.enhanced_index.get_index_stats().await?;
-                if stats.files_count == 0 {
-                    info!("Index is empty, performing initial scan...");
-                    self.schedule_full_reindex().await?;
-                }
-            }
-            IndexingMode::ReadOnly => {}
+        if full_reindex {
+            self.schedule_full_reindex().await?;
         }
 
         Ok(())
     }
 
-    /// Process tasks from the queue (simplified single-threaded version)
-    /// Processes all currently pending tasks, with a safety limit to prevent hanging
+    /// Process all currently pending tasks from the indexing queue.
+    ///
+    /// This method processes tasks that have been scheduled for indexing, including
+    /// file indexing, file removal, and other maintenance operations. It processes
+    /// all pending tasks up to a safety limit to prevent infinite loops.
+    ///
+    /// Tasks are processed sequentially and statistics are updated for each completed task.
+    /// If a task fails, the error is logged and the failure count is incremented, but
+    /// processing continues with the next task.
+    ///
+    /// # Returns
+    /// `Ok(())` when all pending tasks have been processed
+    ///
+    /// # Errors
+    /// This method does not return errors for individual task failures, but may return
+    /// errors for queue access issues or other system-level problems.
+    ///
+    /// # Example
     pub async fn process_pending_tasks(&self) -> Result<()> {
         let max_tasks_per_batch = 100; // Safety limit to prevent infinite loops
         let mut tasks_processed = 0;
@@ -412,11 +564,28 @@ impl IndexingEngine {
         })
     }
 
-    /// Schedule a full reindex by walking the directory tree and adding individual file tasks
+    /// Schedule a complete reindex of all files in the configured directory.
+    ///
+    /// This method recursively walks the directory tree starting from the configured
+    /// base path and schedules indexing tasks for all files that should be indexed
+    /// according to the chunking strategy. Files are processed in batches to avoid
+    /// overwhelming the task queue.
+    ///
+    /// The indexing engine must be started (not in read-only mode) before calling this method.
+    ///
+    /// # Returns
+    /// `Ok(())` when all files have been scheduled for indexing
+    ///
+    /// # Errors
+    /// - If called while the engine is in read-only mode
+    /// - File system errors during directory traversal
+    /// - Task queue submission errors
+    ///
+    /// # Example
     pub async fn schedule_full_reindex(&self) -> Result<()> {
-        if !self.config.mode.allows_indexing() {
+        if !self.started_for_indexing {
             return Err(anyhow::anyhow!(
-                "Full reindex not allowed in read-only mode"
+                "Full reindex not allowed in read-only mode. Call start() first."
             ));
         }
 
@@ -488,11 +657,29 @@ impl IndexingEngine {
         Ok(())
     }
 
-    /// Schedule indexing of a single file
+    /// Schedule indexing of a single file.
+    ///
+    /// This method adds a single file to the indexing queue for processing.
+    /// The file will be read, chunked, and have embeddings generated (if configured)
+    /// during the next call to [`process_pending_tasks`](Self::process_pending_tasks).
+    ///
+    /// The indexing engine must be started (not in read-only mode) before calling this method.
+    ///
+    /// # Arguments
+    /// * `file_path` - Path to the file to be indexed
+    ///
+    /// # Returns
+    /// `Ok(())` when the file has been successfully scheduled
+    ///
+    /// # Errors
+    /// - If called while the engine is in read-only mode
+    /// - Task queue submission errors
+    ///
+    /// # Example
     pub async fn schedule_file_index(&self, file_path: PathBuf) -> Result<()> {
-        if !self.config.mode.allows_indexing() {
+        if !self.started_for_indexing {
             return Err(anyhow::anyhow!(
-                "File indexing not allowed in read-only mode"
+                "File indexing not allowed in read-only mode. Call start() first."
             ));
         }
 
@@ -503,48 +690,99 @@ impl IndexingEngine {
             .map_err(|e| anyhow::anyhow!("Failed to schedule file index: {}", e))
     }
 
-    /// Get current processing statistics
+    /// Get current processing statistics for this indexing session.
+    ///
+    /// Returns real-time statistics about files processed, chunks created,
+    /// embeddings generated, and any errors encountered since the engine started.
+    ///
+    /// # Returns
+    /// ProcessingStats containing current session statistics
+    ///
+    /// # Example
     pub async fn get_stats(&self) -> ProcessingStats {
         self.stats.read().await.clone()
     }
 
-    /// Get index statistics from database
+    /// Get comprehensive statistics about the stored index.
+    ///
+    /// Returns statistics about the total content stored in the database,
+    /// including files, chunks, embeddings, and model information.
+    /// This reflects the complete index state, not just the current session.
+    ///
+    /// # Returns
+    /// IndexStats containing comprehensive database statistics
+    ///
+    /// # Errors
+    /// Database query errors
+    ///
+    /// # Example
     pub async fn get_index_stats(&self) -> Result<IndexStats> {
         self.enhanced_index.get_index_stats().await
     }
 
-    /// Get the current task queue size
+    /// Get the number of tasks currently waiting to be processed.
+    ///
+    /// This returns the size of the internal task queue. A size of 0 indicates
+    /// that all scheduled indexing work has been completed.
+    ///
+    /// # Returns
+    /// Number of pending tasks in the queue
+    ///
+    /// # Example
     pub async fn get_queue_size(&self) -> usize {
         self.task_queue.queue_size().await
     }
 
-    /// Get a reference to the enhanced file index for searching
+    /// Get a reference to the enhanced file index for performing searches.
+    ///
+    /// The enhanced file index provides access to search functionality including
+    /// text search, semantic search (if embeddings are available), and metadata queries.
+    /// This is the primary interface for querying the indexed content.
+    ///
+    /// # Returns
+    /// Reference to the EnhancedFileIndex for search operations
+    ///
+    /// # Example
     pub fn get_enhanced_index(&self) -> &EnhancedFileIndex {
         &self.enhanced_index
     }
 
-    /// Shutdown the indexing engine
+    /// Gracefully shut down the indexing engine.
+    ///
+    /// This method stops all workers, shuts down the task queue, and performs
+    /// cleanup operations. After shutdown, the engine cannot be restarted and
+    /// should be dropped.
+    ///
+    /// It's recommended to call this method before dropping the engine to ensure
+    /// all background tasks complete cleanly.
+    ///
+    /// # Returns
+    /// `Ok(())` when shutdown is complete
+    ///
+    /// # Errors
+    /// - Worker join errors (logged but not propagated)
+    /// - Task queue shutdown errors
+    ///
+    /// # Example
     pub async fn shutdown(&mut self) -> Result<()> {
         info!("Shutting down IndexingEngine");
 
-        // Only shutdown workers and queue if indexing was enabled
-        if self.config.mode.allows_indexing() {
-            // Send shutdown signal to workers
-            if let Some(sender) = self.shutdown_sender.take() {
-                let _ = sender.send(());
-            }
-
-            // Wait for workers to finish
-            for worker in self.workers.drain(..) {
-                let _ = worker.await;
-            }
-
-            // Shutdown task queue
-            self.task_queue.shutdown().await;
-        } else {
-            // In read-only mode, just clear any shutdown sender
-            self.shutdown_sender.take();
+        if !self.started_for_indexing {
+            return Ok(());
         }
+
+        // Send shutdown signal to workers
+        if let Some(sender) = self.shutdown_sender.take() {
+            let _ = sender.send(());
+        }
+
+        // Wait for workers to finish
+        for worker in self.workers.drain(..) {
+            let _ = worker.await;
+        }
+
+        // Shutdown task queue
+        self.task_queue.shutdown().await;
 
         info!("IndexingEngine shutdown complete");
         Ok(())
@@ -571,8 +809,7 @@ mod tests {
     async fn test_indexing_engine_creation() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
 
@@ -587,11 +824,10 @@ mod tests {
     async fn test_file_scheduling() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ContinuousMonitoring);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let mut engine = IndexingEngine::new_memory(config).await?;
-        engine.start().await?;
+        engine.start(false).await?;
 
         // Create a test file
         let test_file = temp_dir.path().join("test.rs");
@@ -625,11 +861,10 @@ mod tests {
         tokio::fs::write(subdir.join("test.rs"), "#[test] fn test() {}").await?;
 
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::FullReindex);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let mut engine = IndexingEngine::new_memory(config).await?;
-        engine.start().await?;
+        engine.start(true).await?;
 
         // Get initial queue size (should be 0)
         let initial_queue_size = engine.task_queue.queue_size().await;

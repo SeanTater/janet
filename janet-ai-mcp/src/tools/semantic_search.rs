@@ -1,10 +1,7 @@
 use crate::ServerConfig;
 use anyhow::Result as AnyhowResult;
 use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider};
-use janet_ai_retriever::retrieval::{
-    indexing_engine::{IndexingEngine, IndexingEngineConfig},
-    indexing_mode::IndexingMode,
-};
+use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
 use janet_ai_retriever::storage::{ChunkStore, EmbeddingStore, sqlite_store::SqliteStore};
 use rmcp::schemars;
 use serde::Deserialize;
@@ -90,7 +87,6 @@ pub async fn semantic_search(
 }
 
 /// Attempt to perform semantic search using the indexing engine
-#[allow(dead_code)] // Used by semantic_search function
 async fn perform_semantic_search(
     config: &ServerConfig,
     query: &str,
@@ -111,8 +107,7 @@ async fn perform_semantic_search(
 
     // Create an IndexingEngine to access the existing index
     let indexing_config =
-        IndexingEngineConfig::new("janet-mcp-search".to_string(), config.root_dir.clone())
-            .with_mode(IndexingMode::ReadOnly);
+        IndexingEngineConfig::new("janet-mcp-search".to_string(), config.root_dir.clone());
 
     let engine = IndexingEngine::new(indexing_config).await?;
     let enhanced_index = engine.get_enhanced_index();
@@ -157,7 +152,6 @@ async fn perform_semantic_search(
 }
 
 /// Create an embedding provider for generating query embeddings
-#[allow(dead_code)] // Used by perform_semantic_search function
 async fn create_embedding_provider() -> AnyhowResult<FastEmbedProvider> {
     // Use a lightweight model suitable for MCP server usage
     let temp_dir =

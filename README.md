@@ -93,15 +93,14 @@ let embeddings = provider.generate_embeddings(&texts).await?;
 
 ```rust
 use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
-use janet_ai_retriever::retrieval::indexing_mode::IndexingMode;
 
 // Set up indexing engine
 let config = IndexingEngineConfig::new("my-project".to_string(), project_path)
-    .with_mode(IndexingMode::FullReindex)
     .with_chunk_size(500);
 
 let mut engine = IndexingEngine::new_memory(config).await?;
-engine.start().await?;
+// Start with full reindex
+engine.start(true).await?;
 
 // Engine will discover, chunk, and optionally embed all files
 ```

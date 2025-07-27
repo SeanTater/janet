@@ -1,3 +1,35 @@
+//! System diagnostics and health monitoring for janet-ai-retriever
+//!
+//! This module provides comprehensive system status reporting capabilities, including
+//! database health, filesystem monitoring, performance metrics, and consistency checking.
+//! It serves as a unified diagnostic interface for monitoring and troubleshooting the
+//! janet-ai-retriever system.
+//!
+//! ## Key Modules
+//!
+//! - **[`api`]**: StatusApi trait and implementations for collecting diagnostic data
+//! - **[`consistency`]**: Index consistency checking and validation
+//! - **[`database`]**: Database health, connection pools, and version information
+//! - **[`filesystem`]**: File monitoring, change events, and stale file detection
+//! - **[`network`]**: Network status and connectivity diagnostics
+//! - **[`performance`]**: Performance metrics, timing, and resource usage
+//! - **[`types`]**: Common status types and report structures
+//!
+//! ## Usage
+//!
+//!
+//! ## Architecture
+//!
+//! ```text
+//! StatusApi ──┬── Database Diagnostics
+//!             ├── Filesystem Monitoring
+//!             ├── Performance Metrics
+//!             ├── Consistency Checking
+//!             └── Network Status
+//!                     ↓
+//!             Unified StatusReport
+//! ```
+
 // Status API modules
 pub mod api;
 pub mod database;

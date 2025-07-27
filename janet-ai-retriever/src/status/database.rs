@@ -1,6 +1,23 @@
+//! Database diagnostics and version information for janet-ai-retriever
+//!
+//! This module provides data structures for reporting database health, connection status,
+//! file information, and dependency versions. Used by the status API to provide detailed
+//! diagnostics about the SQLite database and system dependencies.
+//!
+//! ## Key Components
+//!
+//! - **DatabaseInfo**: Complete database status and configuration
+//! - **ConnectionPoolStatus**: SQLite connection pool monitoring
+//! - **DatabaseFile**: Individual database file information (main, WAL, journal)
+//! - **SqliteInfo**: SQLite-specific configuration and statistics
+//! - **DependencyVersions**: Version information for all system dependencies
+//!
+//! ## Usage
+//!
+
 use serde::{Deserialize, Serialize};
 
-/// Database information and statistics
+/// Complete database status and configuration. See module docs for usage examples.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseInfo {
     /// Database type and version
@@ -17,6 +34,7 @@ pub struct DatabaseInfo {
     pub sqlite_info: Option<SqliteInfo>,
 }
 
+/// SQLite connection pool status. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionPoolStatus {
     /// Total connections in pool
@@ -29,6 +47,7 @@ pub struct ConnectionPoolStatus {
     pub connection_timeout_seconds: Option<u64>,
 }
 
+/// Individual database file information. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseFile {
     /// File path
@@ -39,6 +58,7 @@ pub struct DatabaseFile {
     pub file_type: String,
 }
 
+/// SQLite-specific configuration and statistics. See module docs for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqliteInfo {
     /// SQLite version
@@ -53,7 +73,7 @@ pub struct SqliteInfo {
     pub page_count: Option<u64>,
 }
 
-/// Version information for dependencies
+/// System and dependency version information. See module docs for usage examples.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DependencyVersions {
     /// janet-ai-retriever version

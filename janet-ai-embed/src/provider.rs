@@ -7,8 +7,11 @@ use async_trait::async_trait;
 use fastembed::{
     EmbeddingModel, InitOptions, TextEmbedding, TokenizerFiles, UserDefinedEmbeddingModel,
 };
+use fnv::FnvHasher;
 use half::f16;
+use serde_json;
 use std::collections::HashMap;
+use std::hash::Hasher;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::fs;
 
@@ -22,7 +25,16 @@ pub struct EmbeddingResult {
 }
 
 impl EmbeddingResult {
-    /// Create a new embedding result
+    /// Create a new embedding result from a vector of f16 embeddings.
+    ///
+    /// The dimension is automatically inferred from the first embedding vector.
+    /// If the embeddings vector is empty, dimension defaults to 0.
+    ///
+    /// # Arguments
+    /// * `embeddings` - Vector of embedding vectors, where each inner vector represents
+    ///   the embedding for one input text
+    ///
+    /// # Example
     pub fn new(embeddings: Vec<Vec<f16>>) -> Self {
         let dimension = embeddings.first().map(|e| e.len()).unwrap_or(0);
         Self {
@@ -31,12 +43,22 @@ impl EmbeddingResult {
         }
     }
 
-    /// Get the number of embeddings
+    /// Returns the number of embedding vectors in this result.
+    ///
+    /// # Returns
+    /// The count of embedding vectors (i.e., the number of input texts that were embedded)
+    ///
+    /// # Example
     pub fn len(&self) -> usize {
         self.embeddings.len()
     }
 
-    /// Check if the result is empty
+    /// Returns `true` if this result contains no embedding vectors.
+    ///
+    /// # Returns
+    /// `true` if there are no embeddings, `false` otherwise
+    ///
+    /// # Example
     pub fn is_empty(&self) -> bool {
         self.embeddings.is_empty()
     }
@@ -77,8 +99,18 @@ pub struct FastEmbedProvider {
     dimension: usize,
 }
 
+impl std::fmt::Debug for FastEmbedProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FastEmbedProvider")
+            .field("config", &self.config)
+            .field("model", &self.model.is_some())
+            .field("dimension", &self.dimension)
+            .finish()
+    }
+}
+
 impl FastEmbedProvider {
-    /// Create a new FastEmbed provider with the given configuration
+    /// Creates a new uninitialized provider. See module docs for usage patterns and initialization.
     pub fn new(config: EmbedConfig) -> Self {
         Self {
             config,
@@ -87,7 +119,7 @@ impl FastEmbedProvider {
         }
     }
 
-    /// Initialize the provider by downloading and loading the model
+    /// Downloads and loads the embedding model with caching. See module docs for details.
     pub async fn initialize(&mut self) -> Result<()> {
         tracing::info!(
             "Initializing FastEmbed provider for model: {}",
@@ -96,6 +128,17 @@ impl FastEmbedProvider {
 
         // Create a cache key based on the model configuration
         let cache_key = self.create_cache_key();
+
+        // Check for old cache format and clear if needed
+        {
+            let cache = get_model_cache().lock().unwrap();
+            let has_old_entries = cache.keys().any(|key| !key.starts_with("v1:"));
+            if has_old_entries {
+                drop(cache); // Release lock before clearing
+                Self::clear_cache();
+                tracing::info!("Cleared cache due to version upgrade");
+            }
+        }
 
         // Check if model is already cached
         let cached_data = {
@@ -172,7 +215,7 @@ impl FastEmbedProvider {
         self.validate_model().await
     }
 
-    /// Create and initialize a new FastEmbed provider
+    /// Creates and initializes a provider in one step. See module docs for usage patterns.
     pub async fn create(config: EmbedConfig) -> Result<Self> {
         let mut provider = Self::new(config);
         provider.initialize().await?;
@@ -181,13 +224,16 @@ impl FastEmbedProvider {
 
     /// Create a cache key based on the model configuration
     fn create_cache_key(&self) -> String {
-        format!(
-            "{}:{}:{}:{}",
-            self.config.model_name,
-            self.config.batch_size,
-            self.config.normalize,
-            self.config.hf_revision()
-        )
+        // Serialize entire config to deterministic JSON
+        let config_json =
+            serde_json::to_string(&self.config).expect("Config should always serialize");
+
+        // Hash with FNV for deterministic, fast hashing
+        let mut hasher = FnvHasher::default();
+        hasher.write(b"v1:"); // Version prefix
+        hasher.write(config_json.as_bytes());
+
+        format!("v1:{:x}", hasher.finish())
     }
 
     /// Load a user-defined ONNX model from downloaded HuggingFace files
@@ -334,7 +380,7 @@ impl FastEmbedProvider {
         Ok(())
     }
 
-    /// Clear the global model cache (useful for testing or memory management)
+    /// Clears the global model cache. See module docs for caching details.
     pub fn clear_cache() {
         let cache = get_model_cache();
         let mut cache_guard = cache.lock().unwrap();
@@ -342,7 +388,7 @@ impl FastEmbedProvider {
         tracing::info!("Model cache cleared");
     }
 
-    /// Get the number of cached models
+    /// Returns the number of cached models. See module docs for caching details.
     pub fn cache_size() -> usize {
         let cache = get_model_cache();
         let cache_guard = cache.lock().unwrap();
@@ -529,5 +575,71 @@ mod tests {
                 || onnx_path_str.ends_with("model_quantized.onnx")
         );
         assert!(tokenizer_path.to_string_lossy().contains("tokenizer.json"));
+    }
+
+    #[tokio::test]
+    async fn test_cache_key_generation() {
+        let temp_dir = tempdir().unwrap();
+
+        // Test that same config produces same cache key
+        let config1 = EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(16);
+        let provider1 = FastEmbedProvider::new(config1.clone());
+        let key1 = provider1.create_cache_key();
+
+        let provider2 = FastEmbedProvider::new(config1);
+        let key2 = provider2.create_cache_key();
+
+        assert_eq!(key1, key2, "Same config should produce same cache key");
+        assert!(
+            key1.starts_with("v1:"),
+            "Cache key should have version prefix"
+        );
+
+        // Test that different configs produce different cache keys
+        let config_different_batch =
+            EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(32);
+        let provider3 = FastEmbedProvider::new(config_different_batch);
+        let key3 = provider3.create_cache_key();
+
+        assert_ne!(
+            key1, key3,
+            "Different batch_size should produce different cache key"
+        );
+
+        let config_different_normalize =
+            EmbedConfig::default_with_path(temp_dir.path()).with_normalize(false);
+        let provider4 = FastEmbedProvider::new(config_different_normalize);
+        let key4 = provider4.create_cache_key();
+
+        assert_ne!(
+            key1, key4,
+            "Different normalize setting should produce different cache key"
+        );
+
+        // Test that different model paths produce different keys
+        let temp_dir2 = tempdir().unwrap();
+        let config_different_path = EmbedConfig::default_with_path(temp_dir2.path());
+        let provider5 = FastEmbedProvider::new(config_different_path);
+        let key5 = provider5.create_cache_key();
+
+        assert_ne!(
+            key1, key5,
+            "Different model_base_path should produce different cache key"
+        );
+
+        // Test deterministic behavior - same config should always produce same key
+        let config_deterministic =
+            EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(8);
+        let keys: Vec<String> = (0..5)
+            .map(|_| {
+                let provider = FastEmbedProvider::new(config_deterministic.clone());
+                provider.create_cache_key()
+            })
+            .collect();
+
+        assert!(
+            keys.windows(2).all(|w| w[0] == w[1]),
+            "Cache key generation should be deterministic"
+        );
     }
 }

@@ -1,3 +1,64 @@
+//! Enhanced file index with metadata tracking and embedding model compatibility.
+//!
+//! This module provides a high-level wrapper around [`FileIndex`] that adds metadata
+//! tracking, embedding model management, and version compatibility checks. It's designed
+//! for production use where you need to track multiple embedding models, system versions,
+//! and ensure compatibility across upgrades.
+//!
+//! ## Key Components
+//!
+//! - **EnhancedFileIndex**: Wrapper around FileIndex with metadata capabilities
+//! - **EmbeddingModelMetadata**: Tracks embedding model configurations and compatibility
+//! - **IndexMetadata**: Tracks system versions and repository information
+//! - **IndexStats**: Provides statistics about the indexed data
+//!
+//! ## Additional Database Schema
+//!
+//! Beyond the base FileIndex schema, this adds:
+//!
+//! ```sql
+//! -- Index metadata: tracks system versions and repository info
+//! CREATE TABLE index_metadata (
+//!     id INTEGER PRIMARY KEY,
+//!     repository TEXT UNIQUE,          -- repository identifier
+//!     retriever_version TEXT,          -- janet-ai-retriever version
+//!     context_version TEXT,            -- janet-ai-context version
+//!     embed_version TEXT,              -- janet-ai-embed version
+//!     created_at INTEGER,              -- unix timestamp
+//!     updated_at INTEGER,              -- unix timestamp
+//!     metadata_json TEXT               -- additional metadata
+//! );
+//!
+//! -- Embedding models: tracks different embedding configurations
+//! CREATE TABLE embedding_models (
+//!     model_id TEXT PRIMARY KEY,       -- unique model identifier
+//!     model_name TEXT,                 -- human-readable name
+//!     provider TEXT,                   -- embedding provider
+//!     dimension INTEGER,               -- vector dimension
+//!     model_version TEXT,              -- model version
+//!     normalized BOOLEAN,              -- whether vectors are normalized
+//!     config_json TEXT                 -- additional configuration
+//! );
+//!
+//! -- Enhanced chunks table adds model tracking
+//! ALTER TABLE chunks ADD COLUMN model_id TEXT REFERENCES embedding_models(model_id);
+//! ```
+//!
+//! ## Features
+//!
+//! ### Model Compatibility Checking
+//!
+//! ### Multi-Model Support
+//!
+//! ## When to Use
+//!
+//! - **Production systems** that need model versioning
+//! - **Multi-model environments** with different embedding strategies
+//! - **Long-lived indexes** that need migration support
+//! - **Systems requiring audit trails** of embedding model changes
+//!
+//! For simple use cases, [`FileIndex`] may be sufficient.
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
@@ -107,14 +168,34 @@ impl IndexMetadata {
 }
 
 /// Enhanced file index with metadata tracking and embedding model compatibility checks
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EnhancedFileIndex {
     file_index: FileIndex,
     pool: SqlitePool,
 }
 
 impl EnhancedFileIndex {
-    /// Create a new enhanced file index
+    /// Create a new enhanced file index with persistent storage.
+    ///
+    /// This creates an enhanced file index that includes metadata tracking and
+    /// embedding model compatibility features. The index uses a `.janet-ai.db`
+    /// SQLite database file in the specified directory.
+    ///
+    /// If the database already exists, it will be opened and any missing tables
+    /// will be created automatically.
+    ///
+    /// # Arguments
+    /// * `base` - Directory where the `.janet-ai.db` file will be created
+    ///
+    /// # Returns
+    /// A new EnhancedFileIndex ready for use
+    ///
+    /// # Errors
+    /// - Database connection or creation errors
+    /// - File system permission errors
+    /// - SQL schema creation errors
+    ///
+    /// # Example
     pub async fn open(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open(base).await?;
         let pool = file_index.pool().clone();
@@ -130,7 +211,23 @@ impl EnhancedFileIndex {
         Ok(enhanced)
     }
 
-    /// Create a new enhanced file index using in-memory database (for testing)
+    /// Create a new enhanced file index using an in-memory database.
+    ///
+    /// This creates an enhanced file index that exists only in memory and will be
+    /// lost when dropped. This is primarily intended for testing and development
+    /// scenarios where persistence is not needed.
+    ///
+    /// # Arguments
+    /// * `base` - Base path used for relative path calculations (not for storage)
+    ///
+    /// # Returns
+    /// A new EnhancedFileIndex using in-memory storage
+    ///
+    /// # Errors
+    /// - Database connection or creation errors
+    /// - SQL schema creation errors
+    ///
+    /// # Example
     pub async fn open_memory(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open_memory(base).await?;
         let pool = file_index.pool().clone();
@@ -206,11 +303,36 @@ impl EnhancedFileIndex {
     }
 
     /// Get the underlying FileIndex for compatibility
+    /// Get a reference to the underlying FileIndex.
+    ///
+    /// This provides access to the low-level file indexing operations
+    /// for cases where you need direct access to the base functionality.
+    ///
+    /// # Returns
+    /// Reference to the underlying FileIndex
+    ///
+    /// # Example
     pub fn file_index(&self) -> &FileIndex {
         &self.file_index
     }
 
-    /// Initialize or update index metadata
+    /// Initialize or update index metadata for a repository.
+    ///
+    /// This stores or updates metadata about the index including system versions,
+    /// repository information, and any custom metadata. If metadata for the
+    /// repository already exists, it will be updated with the new values.
+    ///
+    /// # Arguments
+    /// * `metadata` - Index metadata to store or update
+    ///
+    /// # Returns
+    /// `Ok(())` if the metadata was successfully stored
+    ///
+    /// # Errors
+    /// - JSON serialization errors for metadata
+    /// - Database query errors
+    ///
+    /// # Example
     pub async fn upsert_index_metadata(&self, metadata: &IndexMetadata) -> Result<()> {
         let metadata_json = serde_json::to_string(&metadata.metadata)?;
 
@@ -236,7 +358,23 @@ impl EnhancedFileIndex {
         Ok(())
     }
 
-    /// Get index metadata for a repository
+    /// Get index metadata for a specific repository.
+    ///
+    /// Retrieves stored metadata about the index including system versions,
+    /// timestamps, and any custom metadata that was stored.
+    ///
+    /// # Arguments
+    /// * `repository` - Repository name to look up metadata for
+    ///
+    /// # Returns
+    /// - `Some(IndexMetadata)` if metadata exists for the repository
+    /// - `None` if no metadata is found
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - JSON deserialization errors for stored metadata
+    ///
+    /// # Example
     pub async fn get_index_metadata(&self, repository: &str) -> Result<Option<IndexMetadata>> {
         let row = sqlx::query("SELECT * FROM index_metadata WHERE repository = ?1")
             .bind(repository)
@@ -261,7 +399,25 @@ impl EnhancedFileIndex {
         }
     }
 
-    /// Register an embedding model
+    /// Register an embedding model for use with the index.
+    ///
+    /// This stores metadata about an embedding model including its provider,
+    /// dimensions, normalization settings, and configuration. Models must be
+    /// registered before chunks can be associated with them.
+    ///
+    /// If a model with the same ID already exists, it will be updated.
+    ///
+    /// # Arguments
+    /// * `model` - Embedding model metadata to register
+    ///
+    /// # Returns
+    /// `Ok(())` if the model was successfully registered
+    ///
+    /// # Errors
+    /// - JSON serialization errors for model configuration
+    /// - Database query errors
+    ///
+    /// # Example
     pub async fn register_embedding_model(&self, model: &EmbeddingModelMetadata) -> Result<()> {
         let config_json = serde_json::to_string(&model.config)?;
 
@@ -292,7 +448,23 @@ impl EnhancedFileIndex {
         Ok(())
     }
 
-    /// Get embedding model metadata by ID
+    /// Get embedding model metadata by its unique ID.
+    ///
+    /// Retrieves stored metadata about a specific embedding model including
+    /// its configuration, dimensions, and normalization settings.
+    ///
+    /// # Arguments
+    /// * `model_id` - Unique identifier for the embedding model
+    ///
+    /// # Returns
+    /// - `Some(EmbeddingModelMetadata)` if the model exists
+    /// - `None` if no model with the given ID is found
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - JSON deserialization errors for model configuration
+    ///
+    /// # Example
     pub async fn get_embedding_model(
         &self,
         model_id: &str,
@@ -320,7 +492,19 @@ impl EnhancedFileIndex {
         }
     }
 
-    /// Get all registered embedding models
+    /// Get all registered embedding models.
+    ///
+    /// Retrieves metadata for all embedding models that have been registered
+    /// with the index, ordered by creation time (most recent first).
+    ///
+    /// # Returns
+    /// Vector of all registered embedding model metadata
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - JSON deserialization errors for model configurations
+    ///
+    /// # Example
     pub async fn get_all_embedding_models(&self) -> Result<Vec<EmbeddingModelMetadata>> {
         let rows = sqlx::query("SELECT * FROM embedding_models ORDER BY created_at DESC")
             .fetch_all(&self.pool)
@@ -345,7 +529,26 @@ impl EnhancedFileIndex {
         Ok(models)
     }
 
-    /// Insert chunks with model metadata
+    /// Insert or update chunks with associated embedding model metadata.
+    ///
+    /// This stores text chunks along with their embeddings and associates them
+    /// with a specific embedding model. The model must be registered with
+    /// [`register_embedding_model`](Self::register_embedding_model) before calling this method.
+    ///
+    /// If chunks already exist (based on file_hash, line_start, line_end), they will be updated.
+    ///
+    /// # Arguments
+    /// * `chunks` - Array of chunk references to store
+    /// * `model_id` - ID of the embedding model used to generate the embeddings
+    ///
+    /// # Returns
+    /// `Ok(())` if chunks were successfully stored
+    ///
+    /// # Errors
+    /// - Database transaction errors
+    /// - Foreign key constraint errors if model_id doesn't exist
+    ///
+    /// # Example
     pub async fn upsert_chunks_with_model(
         &self,
         chunks: &[ChunkRef],
@@ -386,6 +589,21 @@ impl EnhancedFileIndex {
     }
 
     /// Get chunks by model ID
+    /// Get all chunks associated with a specific embedding model.
+    ///
+    /// Retrieves all stored chunks that were generated using the specified
+    /// embedding model, including their content and embeddings.
+    ///
+    /// # Arguments
+    /// * `model_id` - ID of the embedding model to filter by
+    ///
+    /// # Returns
+    /// Vector of chunk references associated with the model
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
     pub async fn get_chunks_by_model(&self, model_id: &str) -> Result<Vec<ChunkRef>> {
         let rows = sqlx::query(
             "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
@@ -425,7 +643,22 @@ impl EnhancedFileIndex {
         Ok(chunks)
     }
 
-    /// Check for embedding model compatibility
+    /// Check if a new embedding model is compatible with existing data.
+    ///
+    /// This checks whether the provided model is compatible with embeddings already
+    /// stored in the index. Models are considered compatible if they have the same
+    /// dimensions and normalization settings.
+    ///
+    /// # Arguments
+    /// * `current_model` - Model metadata to check for compatibility
+    ///
+    /// # Returns
+    /// `true` if the model is compatible with existing embeddings, `false` otherwise
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
     pub async fn check_model_compatibility(
         &self,
         current_model: &EmbeddingModelMetadata,
@@ -441,6 +674,21 @@ impl EnhancedFileIndex {
     }
 
     /// Delete chunks by model ID (useful when changing embedding models)
+    /// Delete all chunks associated with a specific embedding model.
+    ///
+    /// This removes all chunks that were generated using the specified embedding model.
+    /// Useful when switching to a new embedding model or cleaning up old data.
+    ///
+    /// # Arguments
+    /// * `model_id` - ID of the embedding model whose chunks should be deleted
+    ///
+    /// # Returns
+    /// Number of chunks that were deleted
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
     pub async fn delete_chunks_by_model(&self, model_id: &str) -> Result<usize> {
         let result = sqlx::query("DELETE FROM chunks WHERE model_id = ?1")
             .bind(model_id)
@@ -449,7 +697,24 @@ impl EnhancedFileIndex {
         Ok(result.rows_affected() as usize)
     }
 
-    /// Search for similar chunks using embedding similarity
+    /// Search for similar chunks using embedding similarity.
+    ///
+    /// This performs a semantic similarity search by comparing the query embedding
+    /// against all stored chunk embeddings using cosine similarity. Results are
+    /// ranked by similarity score (highest first).
+    ///
+    /// # Arguments
+    /// * `query_embedding` - Query vector to search for similar chunks
+    /// * `limit` - Maximum number of results to return
+    ///
+    /// # Returns
+    /// Vector of chunk references ordered by similarity (most similar first)
+    ///
+    /// # Errors
+    /// - Database query errors
+    /// - Embedding deserialization errors
+    ///
+    /// # Example
     pub async fn search_similar_chunks(
         &self,
         query_embedding: &[half::f16],
@@ -507,7 +772,19 @@ impl EnhancedFileIndex {
         Ok(similarities.into_iter().map(|(_, chunk)| chunk).collect())
     }
 
-    /// Get statistics about the index
+    /// Get comprehensive statistics about the stored index.
+    ///
+    /// Returns detailed statistics about the content stored in the database,
+    /// including counts of files, chunks, and embeddings. This provides insight
+    /// into the size and completeness of the indexed data.
+    ///
+    /// # Returns
+    /// IndexStats containing counts and statistics about the indexed data
+    ///
+    /// # Errors
+    /// - Database query errors
+    ///
+    /// # Example
     pub async fn get_index_stats(&self) -> Result<IndexStats> {
         let files_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM files")
             .fetch_one(&self.pool)

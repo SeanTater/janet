@@ -12,14 +12,47 @@ pub struct ModelDownloader {
 }
 
 impl ModelDownloader {
-    /// Create a new model downloader
+    /// Create a new model downloader instance.
+    ///
+    /// This initializes the HuggingFace API client for downloading models.
+    /// The downloader handles authentication automatically using environment
+    /// variables or cached tokens.
+    ///
+    /// # Returns
+    /// A new ModelDownloader ready to download models from HuggingFace Hub
+    ///
+    /// # Panics
+    /// Panics if the HuggingFace API client cannot be initialized
+    ///
+    /// # Example
     pub fn new() -> Self {
         Self {
             api: Api::new().expect("Failed to create HuggingFace API client"),
         }
     }
 
-    /// Download a model from HuggingFace if not already present
+    /// Download a model from HuggingFace Hub if not already present locally.
+    ///
+    /// This method checks if the required model files exist locally, and if not,
+    /// downloads them from the specified HuggingFace repository. It handles:
+    /// - ONNX model files (model_q4.onnx or model_quantized.onnx)
+    /// - Tokenizer files (tokenizer.json, config.json, etc.)
+    /// - Progress tracking and error handling
+    ///
+    /// If the configuration is not for a HuggingFace model, this method does nothing.
+    ///
+    /// # Arguments
+    /// * `config` - Configuration specifying the model to download
+    ///
+    /// # Returns
+    /// `Ok(())` if the model is available (either downloaded or already present)
+    ///
+    /// # Errors
+    /// - Network errors during download
+    /// - File system errors when creating directories or writing files
+    /// - HuggingFace API errors (repository not found, authentication, etc.)
+    ///
+    /// # Example
     pub async fn ensure_model(&self, config: &EmbedConfig) -> Result<()> {
         if !config.is_huggingface_model() {
             tracing::debug!("Not a HuggingFace model, skipping download");

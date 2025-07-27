@@ -2,10 +2,7 @@
 mod test_suite {
     use super::super::api::{ConsistencyStatus, NetworkHealth, StatusApi};
     use super::super::types::HealthStatus;
-    use crate::retrieval::{
-        indexing_engine::{IndexingEngine, IndexingEngineConfig},
-        indexing_mode::IndexingMode,
-    };
+    use crate::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
     use anyhow::Result;
     use tempfile::tempdir;
 
@@ -13,8 +10,7 @@ mod test_suite {
     async fn test_get_index_statistics() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
         let enhanced_index = engine.get_enhanced_index();
@@ -33,8 +29,7 @@ mod test_suite {
     async fn test_get_indexing_status() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
 
@@ -51,8 +46,7 @@ mod test_suite {
     async fn test_get_index_health() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
         let enhanced_index = engine.get_enhanced_index();
@@ -70,8 +64,7 @@ mod test_suite {
     async fn test_get_database_info() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
         let enhanced_index = engine.get_enhanced_index();
@@ -99,8 +92,7 @@ mod test_suite {
     async fn test_validate_index_consistency() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
         let enhanced_index = engine.get_enhanced_index();
@@ -119,8 +111,7 @@ mod test_suite {
     async fn test_get_file_system_status() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let fs_status = StatusApi::get_file_system_status(&config).await?;
 
@@ -134,8 +125,7 @@ mod test_suite {
     async fn test_get_search_performance_stats() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
         let enhanced_index = engine.get_enhanced_index();
@@ -151,8 +141,7 @@ mod test_suite {
     async fn test_get_indexing_performance_stats() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config).await?;
 
@@ -167,8 +156,7 @@ mod test_suite {
     async fn test_get_stale_files() -> Result<()> {
         let temp_dir = tempdir()?;
         let config =
-            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf())
-                .with_mode(IndexingMode::ReadOnly);
+            IndexingEngineConfig::new("test-repo".to_string(), temp_dir.path().to_path_buf());
 
         let engine = IndexingEngine::new_memory(config.clone()).await?;
 
