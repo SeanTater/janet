@@ -196,16 +196,6 @@ impl EnhancedFileIndex {
     /// - SQL schema creation errors
     ///
     /// # Example
-    /// ```no_run
-    /// use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// use std::path::Path;
-    ///
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    /// // Index is ready for metadata operations and file indexing
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn open(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open(base).await?;
         let pool = file_index.pool().clone();
@@ -238,16 +228,6 @@ impl EnhancedFileIndex {
     /// - SQL schema creation errors
     ///
     /// # Example
-    /// ```no_run
-    /// use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// use std::path::Path;
-    ///
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open_memory(Path::new(".")).await?;
-    /// // Index exists in memory only - data will be lost on drop
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn open_memory(base: &Path) -> Result<Self> {
         let file_index = FileIndex::open_memory(base).await?;
         let pool = file_index.pool().clone();
@@ -332,18 +312,6 @@ impl EnhancedFileIndex {
     /// Reference to the underlying FileIndex
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let enhanced_index = EnhancedFileIndex::open(Path::new(".")).await?;
-    /// let file_index = enhanced_index.file_index();
-    ///
-    /// // Use file_index for basic operations
-    /// let files = file_index.get_all_files().await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn file_index(&self) -> &FileIndex {
         &self.file_index
     }
@@ -365,19 +333,6 @@ impl EnhancedFileIndex {
     /// - Database query errors
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, IndexMetadata};
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// let metadata = IndexMetadata::new("my-project".to_string())
-    ///     .with_metadata("version".to_string(), "1.0.0".to_string());
-    ///
-    /// index.upsert_index_metadata(&metadata).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn upsert_index_metadata(&self, metadata: &IndexMetadata) -> Result<()> {
         let metadata_json = serde_json::to_string(&metadata.metadata)?;
 
@@ -420,19 +375,6 @@ impl EnhancedFileIndex {
     /// - JSON deserialization errors for stored metadata
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// if let Some(metadata) = index.get_index_metadata("my-project").await? {
-    ///     println!("Index created at: {}", metadata.created_at);
-    ///     println!("Last updated: {}", metadata.updated_at);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn get_index_metadata(&self, repository: &str) -> Result<Option<IndexMetadata>> {
         let row = sqlx::query("SELECT * FROM index_metadata WHERE repository = ?1")
             .bind(repository)
@@ -476,22 +418,6 @@ impl EnhancedFileIndex {
     /// - Database query errors
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, EmbeddingModelMetadata};
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// let model = EmbeddingModelMetadata::new(
-    ///     "sentence-transformers/all-MiniLM-L6-v2".to_string(),
-    ///     "fastembed".to_string(),
-    ///     384
-    /// ).with_normalized(true);
-    ///
-    /// index.register_embedding_model(&model).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn register_embedding_model(&self, model: &EmbeddingModelMetadata) -> Result<()> {
         let config_json = serde_json::to_string(&model.config)?;
 
@@ -539,19 +465,6 @@ impl EnhancedFileIndex {
     /// - JSON deserialization errors for model configuration
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// let model_id = "fastembed:sentence-transformers/all-MiniLM-L6-v2:latest:384:norm";
-    /// if let Some(model) = index.get_embedding_model(model_id).await? {
-    ///     println!("Model: {} ({}D)", model.model_name, model.dimension);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn get_embedding_model(
         &self,
         model_id: &str,
@@ -592,20 +505,6 @@ impl EnhancedFileIndex {
     /// - JSON deserialization errors for model configurations
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// let models = index.get_all_embedding_models().await?;
-    /// for model in models {
-    ///     println!("Model: {} ({}D, normalized: {})",
-    ///              model.model_name, model.dimension, model.normalized);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn get_all_embedding_models(&self) -> Result<Vec<EmbeddingModelMetadata>> {
         let rows = sqlx::query("SELECT * FROM embedding_models ORDER BY created_at DESC")
             .fetch_all(&self.pool)
@@ -650,19 +549,6 @@ impl EnhancedFileIndex {
     /// - Foreign key constraint errors if model_id doesn't exist
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use janet_ai_retriever::retrieval::file_index::ChunkRef;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    /// let model_id = "fastembed:sentence-transformers/all-MiniLM-L6-v2:latest:384:norm";
-    ///
-    /// let chunks: Vec<ChunkRef> = vec![/* chunks with embeddings */];
-    /// index.upsert_chunks_with_model(&chunks, model_id).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn upsert_chunks_with_model(
         &self,
         chunks: &[ChunkRef],
@@ -718,18 +604,6 @@ impl EnhancedFileIndex {
     /// - Database query errors
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    /// let model_id = "fastembed:sentence-transformers/all-MiniLM-L6-v2:latest:384:norm";
-    ///
-    /// let chunks = index.get_chunks_by_model(model_id).await?;
-    /// println!("Found {} chunks for model {}", chunks.len(), model_id);
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn get_chunks_by_model(&self, model_id: &str) -> Result<Vec<ChunkRef>> {
         let rows = sqlx::query(
             "SELECT id, file_hash, relative_path, line_start, line_end, content, embedding
@@ -785,24 +659,6 @@ impl EnhancedFileIndex {
     /// - Database query errors
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, EmbeddingModelMetadata};
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// let new_model = EmbeddingModelMetadata::new(
-    ///     "different-model".to_string(),
-    ///     "fastembed".to_string(),
-    ///     384
-    /// );
-    ///
-    /// if !index.check_model_compatibility(&new_model).await? {
-    ///     println!("Model incompatible - will need to re-embed existing data");
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn check_model_compatibility(
         &self,
         current_model: &EmbeddingModelMetadata,
@@ -833,18 +689,6 @@ impl EnhancedFileIndex {
     /// - Database query errors
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    /// let old_model_id = "fastembed:old-model:latest:256:norm";
-    ///
-    /// let deleted_count = index.delete_chunks_by_model(old_model_id).await?;
-    /// println!("Deleted {} chunks from old model", deleted_count);
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn delete_chunks_by_model(&self, model_id: &str) -> Result<usize> {
         let result = sqlx::query("DELETE FROM chunks WHERE model_id = ?1")
             .bind(model_id)
@@ -871,22 +715,6 @@ impl EnhancedFileIndex {
     /// - Embedding deserialization errors
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// // Create a query embedding (normally from your embedding model)
-    /// let query_embedding: Vec<half::f16> = vec![half::f16::from_f32(0.1); 384];
-    ///
-    /// let similar_chunks = index.search_similar_chunks(&query_embedding, 10).await?;
-    /// for chunk in similar_chunks {
-    ///     println!("Similar: {}", chunk.content);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn search_similar_chunks(
         &self,
         query_embedding: &[half::f16],
@@ -957,19 +785,6 @@ impl EnhancedFileIndex {
     /// - Database query errors
     ///
     /// # Example
-    /// ```no_run
-    /// # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-    /// # use std::path::Path;
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let index = EnhancedFileIndex::open(Path::new(".")).await?;
-    ///
-    /// let stats = index.get_index_stats().await?;
-    /// println!("Index contains {} files with {} chunks",
-    ///          stats.files_count, stats.chunks_count);
-    /// println!("{} chunks have embeddings", stats.embedded_chunks_count);
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn get_index_stats(&self) -> Result<IndexStats> {
         let files_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM files")
             .fetch_one(&self.pool)

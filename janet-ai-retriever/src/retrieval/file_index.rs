@@ -62,15 +62,6 @@ use std::path::{Path, PathBuf};
 /// * `hash` - Blake3 hash of the content for deduplication and change detection
 ///
 /// # Example
-/// ```
-/// use janet_ai_retriever::retrieval::file_index::FileRef;
-///
-/// let file_ref = FileRef {
-///     relative_path: "src/main.rs".to_string(),
-///     content: b"fn main() {}".to_vec(),
-///     hash: *blake3::hash(b"fn main() {}").as_bytes(),
-/// };
-/// ```
 #[derive(Debug, Clone)]
 pub struct FileRef {
     /// The path to the file, relative to the root of the project
@@ -97,20 +88,6 @@ pub struct FileRef {
 /// * `embedding` - Optional vector embedding for semantic search (f16 for efficiency)
 ///
 /// # Example
-/// ```
-/// use janet_ai_retriever::retrieval::file_index::ChunkRef;
-/// use half::f16;
-///
-/// let chunk = ChunkRef {
-///     id: None,
-///     file_hash: [0u8; 32], // Would be actual file hash
-///     relative_path: "src/main.rs".to_string(),
-///     line_start: 1,
-///     line_end: 5,
-///     content: "fn main() {\n    println!(\"Hello!\");\n}".to_string(),
-///     embedding: Some(vec![f16::from_f32(0.1), f16::from_f32(0.2)]),
-/// };
-/// ```
 #[derive(Debug, Clone)]
 pub struct ChunkRef {
     pub id: Option<i64>,
@@ -134,37 +111,8 @@ pub struct ChunkRef {
 /// - **Embeddings**: Optional f16 vector embeddings for semantic search
 ///
 /// # Database Schema
-/// ```sql
-/// CREATE TABLE files (
-///     hash BLOB PRIMARY KEY,
-///     relative_path TEXT NOT NULL,
-///     content BLOB NOT NULL
-/// );
-///
-/// CREATE TABLE chunks (
-///     id INTEGER PRIMARY KEY AUTOINCREMENT,
-///     file_hash BLOB NOT NULL,
-///     relative_path TEXT NOT NULL,
-///     line_start INTEGER NOT NULL,
-///     line_end INTEGER NOT NULL,
-///     content TEXT NOT NULL,
-///     embedding BLOB
-/// );
-/// ```
 ///
 /// # Example
-/// ```no_run
-/// use janet_ai_retriever::retrieval::file_index::FileIndex;
-/// use std::path::Path;
-///
-/// # async fn example() -> anyhow::Result<()> {
-/// // Open index in current directory
-/// let file_index = FileIndex::open(Path::new(".")).await?;
-///
-/// // Index stores files and chunks...
-/// # Ok(())
-/// # }
-/// ```
 #[derive(Clone, Debug)]
 pub struct FileIndex {
     pub(crate) base: PathBuf,

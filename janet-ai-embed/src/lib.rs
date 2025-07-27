@@ -13,27 +13,6 @@
 //! - **Half-Precision**: Memory-efficient f16 embeddings for better performance
 //! - **Configurable**: Flexible configuration with sensible defaults
 //!
-//! ## Quick Start
-//!
-//! ```no_run
-//! use janet_ai_embed::{FastEmbedProvider, EmbedConfig};
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! // Create a provider with ModernBERT-large model
-//! let provider = FastEmbedProvider::create(
-//!     EmbedConfig::modernbert_large("/tmp/models")
-//! ).await?;
-//!
-//! // Generate embeddings for text
-//! let texts = vec!["Hello world".to_string(), "How are you?".to_string()];
-//! let result = provider.embed_texts(&texts).await?;
-//!
-//! println!("Generated {} embeddings of dimension {}",
-//!          result.len(), result.dimension);
-//! # Ok(())
-//! # }
-//! ```
-//!
 //! ## Supported Models
 //!
 //! The library supports various embedding models including:

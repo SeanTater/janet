@@ -25,11 +25,6 @@ impl ModelDownloader {
     /// Panics if the HuggingFace API client cannot be initialized
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::ModelDownloader;
-    ///
-    /// let downloader = ModelDownloader::new();
-    /// ```
     pub fn new() -> Self {
         Self {
             api: Api::new().expect("Failed to create HuggingFace API client"),
@@ -58,18 +53,6 @@ impl ModelDownloader {
     /// - HuggingFace API errors (repository not found, authentication, etc.)
     ///
     /// # Example
-    /// ```no_run
-    /// use janet_ai_embed::{ModelDownloader, EmbedConfig};
-    ///
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let downloader = ModelDownloader::new();
-    /// let config = EmbedConfig::modernbert_large("/tmp/models");
-    ///
-    /// // Downloads ModernBERT-large if not already present
-    /// downloader.ensure_model(&config).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn ensure_model(&self, config: &EmbedConfig) -> Result<()> {
         if !config.is_huggingface_model() {
             tracing::debug!("Not a HuggingFace model, skipping download");

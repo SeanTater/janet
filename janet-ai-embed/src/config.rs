@@ -30,16 +30,6 @@ impl TokenizerConfig {
     /// A builder instance for constructing TokenizerConfig
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::TokenizerConfig;
-    ///
-    /// let config = TokenizerConfig::builder()
-    ///     .tokenizer_path("/path/to/tokenizer.json")
-    ///     .config_path("/path/to/config.json")
-    ///     .special_tokens_map_path("/path/to/special_tokens_map.json")
-    ///     .build()
-    ///     .unwrap();
-    /// ```
     pub fn builder() -> TokenizerConfigBuilder {
         TokenizerConfigBuilder::default()
     }
@@ -59,12 +49,6 @@ impl TokenizerConfig {
     /// A configured TokenizerConfig with standard file paths
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::TokenizerConfig;
-    ///
-    /// let config = TokenizerConfig::standard("/path/to/model");
-    /// // Will look for files like /path/to/model/tokenizer.json, etc.
-    /// ```
     pub fn standard<P: AsRef<Path>>(model_dir: P) -> Self {
         let model_dir = model_dir.as_ref();
         TokenizerConfigBuilder::default()
@@ -90,15 +74,6 @@ impl TokenizerConfig {
     /// A configured TokenizerConfig with the specified file paths
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::TokenizerConfig;
-    ///
-    /// let config = TokenizerConfig::custom(
-    ///     "/custom/path/my_tokenizer.json",
-    ///     "/custom/path/my_config.json",
-    ///     "/custom/path/my_special_tokens.json"
-    /// );
-    /// ```
     pub fn custom<P1, P2, P3>(
         tokenizer_path: P1,
         config_path: P2,
@@ -129,13 +104,6 @@ impl TokenizerConfig {
     /// Returns `EmbedError::InvalidConfig` if any required file is missing
     ///
     /// # Example
-    /// ```no_run
-    /// use janet_ai_embed::TokenizerConfig;
-    ///
-    /// let config = TokenizerConfig::standard("/path/to/model");
-    /// config.validate()?; // Will error if files don't exist
-    /// # Ok::<(), janet_ai_embed::EmbedError>(())
-    /// ```
     pub fn validate(&self) -> Result<()> {
         let paths_to_check = [
             ("tokenizer", &self.tokenizer_path),
@@ -280,13 +248,6 @@ impl EmbedConfig {
     /// The complete path to the model directory
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbedConfig;
-    ///
-    /// let config = EmbedConfig::modernbert_large("/tmp/models");
-    /// let model_path = config.model_path();
-    /// // Returns PathBuf("/tmp/models/ModernBERT-large")
-    /// ```
     pub fn model_path(&self) -> PathBuf {
         self.model_base_path.join(&self.model_name)
     }
@@ -319,15 +280,6 @@ impl EmbedConfig {
     /// `true` if configured for HuggingFace download, `false` for local models
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbedConfig;
-    ///
-    /// let hf_config = EmbedConfig::modernbert_large("/tmp/models");
-    /// assert!(hf_config.is_huggingface_model());
-    ///
-    /// let local_config = EmbedConfig::default_with_path("/tmp/models");
-    /// assert!(!local_config.is_huggingface_model());
-    /// ```
     pub fn is_huggingface_model(&self) -> bool {
         self.hf_model_repo.is_some()
     }

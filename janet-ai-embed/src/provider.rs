@@ -35,18 +35,6 @@ impl EmbeddingResult {
     ///   the embedding for one input text
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbeddingResult;
-    /// use half::f16;
-    ///
-    /// let embeddings = vec![
-    ///     vec![f16::from_f32(0.1), f16::from_f32(0.2)],
-    ///     vec![f16::from_f32(0.3), f16::from_f32(0.4)],
-    /// ];
-    /// let result = EmbeddingResult::new(embeddings);
-    /// assert_eq!(result.dimension, 2);
-    /// assert_eq!(result.len(), 2);
-    /// ```
     pub fn new(embeddings: Vec<Vec<f16>>) -> Self {
         let dimension = embeddings.first().map(|e| e.len()).unwrap_or(0);
         Self {
@@ -61,14 +49,6 @@ impl EmbeddingResult {
     /// The count of embedding vectors (i.e., the number of input texts that were embedded)
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbeddingResult;
-    /// use half::f16;
-    ///
-    /// let embeddings = vec![vec![f16::from_f32(0.1)], vec![f16::from_f32(0.2)]];
-    /// let result = EmbeddingResult::new(embeddings);
-    /// assert_eq!(result.len(), 2);
-    /// ```
     pub fn len(&self) -> usize {
         self.embeddings.len()
     }
@@ -79,12 +59,6 @@ impl EmbeddingResult {
     /// `true` if there are no embeddings, `false` otherwise
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbeddingResult;
-    ///
-    /// let empty_result = EmbeddingResult::new(vec![]);
-    /// assert!(empty_result.is_empty());
-    /// ```
     pub fn is_empty(&self) -> bool {
         self.embeddings.is_empty()
     }

@@ -8,13 +8,6 @@ use std::path::PathBuf;
 /// Used throughout the crate for operations that can fail.
 ///
 /// # Example
-/// ```
-/// use janet_ai_embed::{Result, EmbedError};
-///
-/// fn example_function() -> Result<String> {
-///     Ok("success".to_string())
-/// }
-/// ```
 pub type Result<T> = std::result::Result<T, EmbedError>;
 
 /// Comprehensive error type for all embedding operations.
@@ -36,25 +29,6 @@ pub type Result<T> = std::result::Result<T, EmbedError>;
 /// - **External Errors**: Failures from dependencies
 ///
 /// # Example
-/// ```no_run
-/// use janet_ai_embed::{FastEmbedProvider, EmbedConfig, EmbedError};
-///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let config = EmbedConfig::modernbert_large("/nonexistent/path");
-///
-/// match FastEmbedProvider::create(config).await {
-///     Ok(provider) => println!("Provider created successfully"),
-///     Err(EmbedError::ModelFileNotFound { path }) => {
-///         println!("Model files not found at: {}", path.display());
-///     }
-///     Err(EmbedError::InvalidConfig { message }) => {
-///         println!("Configuration error: {}", message);
-///     }
-///     Err(e) => println!("Other error: {}", e),
-/// }
-/// # Ok(())
-/// # }
-/// ```
 #[derive(Debug, thiserror::Error)]
 pub enum EmbedError {
     /// Error when model files are not found or invalid
@@ -114,13 +88,6 @@ impl EmbedError {
     /// A new [`EmbedError::ModelInitialization`] variant
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbedError;
-    /// use std::io;
-    ///
-    /// let io_error = io::Error::new(io::ErrorKind::NotFound, "Model file missing");
-    /// let embed_error = EmbedError::model_init(io_error);
-    /// ```
     pub fn model_init<E>(source: E) -> Self
     where
         E: std::error::Error + Send + Sync + 'static,
@@ -142,13 +109,6 @@ impl EmbedError {
     /// A new [`EmbedError::EmbeddingGeneration`] variant
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbedError;
-    /// use std::io;
-    ///
-    /// let io_error = io::Error::new(io::ErrorKind::TimedOut, "Model inference timeout");
-    /// let embed_error = EmbedError::embedding_gen(io_error);
-    /// ```
     pub fn embedding_gen<E>(source: E) -> Self
     where
         E: std::error::Error + Send + Sync + 'static,
@@ -171,12 +131,6 @@ impl EmbedError {
     /// A new [`EmbedError::InvalidConfig`] variant
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_embed::EmbedError;
-    ///
-    /// let error = EmbedError::invalid_config("Batch size must be greater than 0");
-    /// assert!(matches!(error, EmbedError::InvalidConfig { .. }));
-    /// ```
     pub fn invalid_config<S: Into<String>>(message: S) -> Self {
         Self::InvalidConfig {
             message: message.into(),

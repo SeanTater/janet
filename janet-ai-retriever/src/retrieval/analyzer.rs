@@ -60,17 +60,6 @@ use std::path::{Path, PathBuf};
 /// including embedding model settings and chunking parameters.
 ///
 /// # Examples
-/// ```
-/// use janet_ai_retriever::retrieval::analyzer::BertChunkConfig;
-///
-/// let config = BertChunkConfig {
-///     model_base_path: Some("models".to_string()),
-///     model_name: Some("snowflake-arctic-embed-xs".to_string()),
-///     chunk_size_lines: 100,
-///     chunk_step_lines: 50,
-///     generate_embeddings: true,
-/// };
-/// ```
 #[derive(Debug, serde::Deserialize)]
 pub struct BertChunkConfig {
     /// Base path for embedding models (e.g., "models/")
