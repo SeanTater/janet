@@ -72,17 +72,6 @@ impl JanetMcpServer {
     /// - IndexingEngine initialization errors
     ///
     /// # Example
-    /// ```no_run
-    /// use janet_ai_mcp::{JanetMcpServer, ServerConfig};
-    /// use std::path::PathBuf;
-    ///
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let config = ServerConfig::new(PathBuf::from("."));
-    /// let server = JanetMcpServer::new(config).await?;
-    /// // Server is ready to handle MCP requests
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn new(config: ServerConfig) -> Result<Self> {
         info!(
             "Initializing Janet MCP server with root: {:?}",
@@ -182,19 +171,6 @@ impl JanetMcpServer {
     /// - Tool execution errors
     ///
     /// # Example
-    /// ```no_run
-    /// use janet_ai_mcp::{JanetMcpServer, ServerConfig};
-    /// use std::path::PathBuf;
-    ///
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let config = ServerConfig::new(PathBuf::from("."));
-    /// let server = JanetMcpServer::new(config).await?;
-    ///
-    /// // Start serving - this will block until shutdown
-    /// server.serve_stdio().await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn serve_stdio(self) -> Result<()> {
         info!("Starting MCP server with stdio transport");
 

@@ -122,12 +122,6 @@ impl ServerConfig {
     /// A new ServerConfig instance
     ///
     /// # Example
-    /// ```
-    /// use janet_ai_mcp::ServerConfig;
-    /// use std::path::PathBuf;
-    ///
-    /// let config = ServerConfig::new(PathBuf::from("/path/to/project"));
-    /// ```
     pub fn new(root_dir: PathBuf) -> Self {
         Self { root_dir }
     }
@@ -174,19 +168,6 @@ impl Default for ServerConfig {
 /// - MCP protocol communication errors
 ///
 /// # Example Usage as Library
-/// ```no_run
-/// use janet_ai_mcp::run_server;
-/// use std::path::PathBuf;
-///
-/// # async fn example() -> anyhow::Result<()> {
-/// // Run server with specific directory
-/// run_server(Some(PathBuf::from("/path/to/project"))).await?;
-///
-/// // Or use current directory
-/// run_server(None).await?;
-/// # Ok(())
-/// # }
-/// ```
 ///
 /// # Example Usage as Binary
 /// ```bash
