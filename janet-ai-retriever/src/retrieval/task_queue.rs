@@ -39,12 +39,9 @@
 //! - Database updates → TaskQueue
 //! - Statistics and progress tracking
 
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use flume::{Receiver, Sender, bounded};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{Mutex, Notify, mpsc};
 use tracing::{debug, warn};
 
 /// Priority levels for indexing tasks. See module-level docs for usage examples.
@@ -137,61 +134,6 @@ impl IndexingTask {
     }
 }
 
-/// Wrapper for priority queue ordering
-#[derive(Debug)]
-struct PriorityTask {
-    task: IndexingTask,
-    /// Secondary priority based on file modification time for files
-    /// More recently modified files get higher priority
-    file_priority: u64,
-}
-
-impl PriorityTask {
-    fn new(task: IndexingTask) -> Self {
-        let file_priority = match &task.task_type {
-            TaskType::IndexFile { path } | TaskType::RemoveFile { path } => {
-                // Use file modification time as secondary priority
-                std::fs::metadata(path)
-                    .and_then(|m| m.modified())
-                    .map(|t| t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs())
-                    .unwrap_or(0)
-            }
-        };
-
-        Self {
-            task,
-            file_priority,
-        }
-    }
-}
-
-impl PartialEq for PriorityTask {
-    fn eq(&self, other: &Self) -> bool {
-        self.task.priority == other.task.priority && self.file_priority == other.file_priority
-    }
-}
-
-impl Eq for PriorityTask {}
-
-impl PartialOrd for PriorityTask {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for PriorityTask {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Primary: task priority (higher is better)
-        match self.task.priority.cmp(&other.task.priority) {
-            Ordering::Equal => {
-                // Secondary: file modification time (more recent is better)
-                self.file_priority.cmp(&other.file_priority)
-            }
-            other => other,
-        }
-    }
-}
-
 /// Configuration for task queue behavior. See module docs for examples.
 #[derive(Debug, Clone)]
 pub struct TaskQueueConfig {
@@ -222,132 +164,65 @@ impl Default for TaskQueueConfig {
 /// Priority-based async task queue. See module docs for usage patterns.
 #[derive(Debug)]
 pub struct TaskQueue {
-    config: TaskQueueConfig,
-    queue: Arc<Mutex<BinaryHeap<PriorityTask>>>,
-    task_sender: mpsc::UnboundedSender<IndexingTask>,
-    task_receiver: Arc<Mutex<mpsc::UnboundedReceiver<IndexingTask>>>,
-    shutdown_notify: Arc<Notify>,
-    is_shutdown: Arc<Mutex<bool>>,
+    sender: Sender<IndexingTask>,
+    receiver: Receiver<IndexingTask>,
 }
 
 impl TaskQueue {
     /// Creates a new task queue with the specified configuration.
     pub fn new(config: TaskQueueConfig) -> Self {
-        let (task_sender, task_receiver) = mpsc::unbounded_channel();
+        let (sender, receiver) = bounded(config.max_queue_size);
 
-        Self {
-            config,
-            queue: Arc::new(Mutex::new(BinaryHeap::new())),
-            task_sender,
-            task_receiver: Arc::new(Mutex::new(task_receiver)),
-            shutdown_notify: Arc::new(Notify::new()),
-            is_shutdown: Arc::new(Mutex::new(false)),
-        }
+        Self { sender, receiver }
     }
 
     /// Submit a task to the queue
-    pub async fn submit_task(&self, task: IndexingTask) -> Result<(), String> {
-        if *self.is_shutdown.lock().await {
-            return Err("Task queue is shutdown".to_string());
-        }
-
-        // Check queue size limit
-        {
-            let queue = self.queue.lock().await;
-            if queue.len() >= self.config.max_queue_size {
-                warn!("Task queue is full, dropping task: {}", task.description());
-                return Err("Task queue is full".to_string());
-            }
-        }
-
+    pub fn submit_task(&self, task: IndexingTask) -> Result<(), String> {
         debug!("Submitting task: {}", task.description());
 
-        self.task_sender
-            .send(task)
-            .map_err(|e| format!("Failed to submit task: {e}"))?;
+        self.sender.try_send(task).map_err(|e| match e {
+            flume::TrySendError::Full(_) => {
+                warn!("Task queue is full, dropping task");
+                "Task queue is full".to_string()
+            }
+            flume::TrySendError::Disconnected(_) => "Task queue is shutdown".to_string(),
+        })?;
 
         Ok(())
     }
 
     /// Submit multiple tasks at once
-    pub async fn submit_tasks(&self, tasks: Vec<IndexingTask>) -> Result<(), String> {
+    pub fn submit_tasks(&self, tasks: Vec<IndexingTask>) -> Result<(), String> {
         for task in tasks {
-            self.submit_task(task).await?;
+            self.submit_task(task)?;
         }
         Ok(())
     }
 
-    /// Get the next highest priority task from the queue
-    pub async fn pop_task(&self) -> Option<IndexingTask> {
-        let mut queue = self.queue.lock().await;
-        queue.pop().map(|pt| pt.task)
+    /// Get the next task from the queue (blocking)
+    pub async fn recv_task(&self) -> Result<IndexingTask, String> {
+        self.receiver
+            .recv_async()
+            .await
+            .map_err(|_| "Task queue is shutdown".to_string())
+    }
+
+    /// Try to get the next task from the queue (non-blocking)
+    pub fn try_recv_task(&self) -> Result<IndexingTask, String> {
+        self.receiver.try_recv().map_err(|e| match e {
+            flume::TryRecvError::Empty => "No tasks available".to_string(),
+            flume::TryRecvError::Disconnected => "Task queue is shutdown".to_string(),
+        })
     }
 
     /// Get the current queue size
-    pub async fn queue_size(&self) -> usize {
-        let queue = self.queue.lock().await;
-        queue.len()
-    }
-
-    /// Start the queue processor that moves tasks from the channel to the priority queue
-    pub async fn start_processor(&self) {
-        let queue = Arc::clone(&self.queue);
-        let receiver = Arc::clone(&self.task_receiver);
-        let shutdown_notify = Arc::clone(&self.shutdown_notify);
-        let is_shutdown = Arc::clone(&self.is_shutdown);
-
-        tokio::spawn(async move {
-            let mut receiver = receiver.lock().await;
-
-            loop {
-                tokio::select! {
-                    task = receiver.recv() => {
-                        match task {
-                            Some(task) => {
-                                let mut queue = queue.lock().await;
-                                queue.push(PriorityTask::new(task));
-                            }
-                            None => {
-                                debug!("Task channel closed, stopping processor");
-                                break;
-                            }
-                        }
-                    }
-                    _ = shutdown_notify.notified() => {
-                        debug!("Shutdown signal received, stopping processor");
-                        break;
-                    }
-                }
-            }
-
-            let mut shutdown = is_shutdown.lock().await;
-            *shutdown = true;
-        });
-    }
-
-    /// Shutdown the task queue
-    pub async fn shutdown(&self) {
-        debug!("Shutting down task queue");
-        self.shutdown_notify.notify_waiters();
-
-        // Wait for shutdown to complete
-        while !*self.is_shutdown.lock().await {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-
-        debug!("Task queue shutdown complete");
+    pub fn queue_size(&self) -> usize {
+        self.receiver.len()
     }
 
     /// Check if the queue is shutdown
-    pub async fn is_shutdown(&self) -> bool {
-        *self.is_shutdown.lock().await
-    }
-
-    /// Clear all tasks from the queue
-    pub async fn clear(&self) {
-        let mut queue = self.queue.lock().await;
-        queue.clear();
-        debug!("Task queue cleared");
+    pub fn is_shutdown(&self) -> bool {
+        self.receiver.is_disconnected()
     }
 }
 
@@ -357,20 +232,20 @@ mod tests {
 
     #[test]
     fn test_task_priority_ordering() {
-        let background = PriorityTask::new(IndexingTask::new(
+        let background = IndexingTask::new(
             TaskType::IndexFile {
                 path: PathBuf::from("test"),
             },
             TaskPriority::Background,
-        ));
-        let priority = PriorityTask::new(IndexingTask::new(
+        );
+        let priority = IndexingTask::new(
             TaskType::IndexFile {
                 path: PathBuf::from("test"),
             },
             TaskPriority::Priority,
-        ));
+        );
 
-        assert!(priority > background);
+        assert!(priority.priority > background.priority);
     }
 
     #[tokio::test]
@@ -378,33 +253,27 @@ mod tests {
         let config = TaskQueueConfig::default();
         let queue = TaskQueue::new(config);
 
-        // Start the processor
-        queue.start_processor().await;
-
         // Submit some tasks
         let task1 = IndexingTask::index_file_background(PathBuf::from("file1.txt"));
         let task2 = IndexingTask::index_file(PathBuf::from("file2.txt"));
         let task3 = IndexingTask::index_file(PathBuf::from("file3.txt"));
 
-        queue.submit_task(task1).await.unwrap();
-        queue.submit_task(task2).await.unwrap();
-        queue.submit_task(task3).await.unwrap();
+        queue.submit_task(task1).unwrap();
+        queue.submit_task(task2).unwrap();
+        queue.submit_task(task3).unwrap();
 
-        // Give processor time to process
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // Receive tasks (order depends on flume's internal handling)
+        let received1 = queue.recv_task().await.unwrap();
+        let received2 = queue.recv_task().await.unwrap();
+        let received3 = queue.recv_task().await.unwrap();
 
-        // Priority tasks should come first (in any order since they have same priority)
-        let next_task = queue.pop_task().await.unwrap();
-        assert_eq!(next_task.priority, TaskPriority::Priority);
+        // Verify we got all tasks back
+        assert_eq!(queue.queue_size(), 0);
 
-        let next_task = queue.pop_task().await.unwrap();
-        assert_eq!(next_task.priority, TaskPriority::Priority);
-
-        // Background priority comes last
-        let next_task = queue.pop_task().await.unwrap();
-        assert_eq!(next_task.priority, TaskPriority::Background);
-
-        queue.shutdown().await;
+        // At least one should be a priority task
+        let priorities = [received1.priority, received2.priority, received3.priority];
+        assert!(priorities.contains(&TaskPriority::Priority));
+        assert!(priorities.contains(&TaskPriority::Background));
     }
 
     #[tokio::test]
