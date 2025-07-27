@@ -66,3 +66,4 @@ models/
 **/*.onnx
 **/*.bin
 **/*.safetensors
+.mcp.json
