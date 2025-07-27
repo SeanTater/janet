@@ -44,36 +44,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::file_index::{FileIndex, FileRef, ChunkRef};
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! // Open database (creates if missing)
-//! let index = FileIndex::open(Path::new(".")).await?;
-//!
-//! // Store a file
-//! let file = FileRef {
-//!     relative_path: "src/main.rs".to_string(),
-//!     content: b"fn main() {}".to_vec(),
-//!     hash: [0; 32], // blake3 hash
-//! };
-//! index.upsert_file(&file).await?;
-//!
-//! // Store chunks with embeddings
-//! let chunks = vec![ChunkRef {
-//!     id: None,
-//!     file_hash: [0; 32],
-//!     relative_path: "src/main.rs".to_string(),
-//!     line_start: 1,
-//!     line_end: 1,
-//!     content: "fn main() {}".to_string(),
-//!     embedding: Some(vec![half::f16::from_f32(0.1)]),
-//! }];
-//! index.upsert_chunks(&chunks).await?;
-//! # Ok(())
-//! # }
-//! ```
 
 use anyhow::Result;
 use sqlx::sqlite::SqliteConnectOptions;

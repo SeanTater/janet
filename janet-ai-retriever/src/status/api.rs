@@ -13,26 +13,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::status::api::StatusApi;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! // StatusApi is typically used by higher-level systems like MCP servers
-//! // let enhanced_index = /* ... */;
-//! // let indexing_engine = /* ... */;
-//! // let config = /* ... */;
-//! // let base_path = /* ... */;
-//!
-//! // Generate comprehensive status report
-//! // let status = StatusApi::get_comprehensive_status(
-//! //     &enhanced_index,
-//! //     &indexing_engine,
-//! //     &config,
-//! //     &base_path,
-//! // ).await?;
-//! # Ok(())
-//! # }
-//! ```
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};

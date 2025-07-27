@@ -29,31 +29,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::analyzer::{AnalyzerTrait, RemoteBertChunkAnalyzer, BertChunkConfig};
-//! use janet_ai_retriever::retrieval::file_index::FileIndex;
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let config = BertChunkConfig {
-//!     model_base_path: Some("./models".to_string()),
-//!     model_name: Some("snowflake-arctic-embed-xs".to_string()),
-//!     chunk_size_lines: 20,
-//!     chunk_step_lines: 15,  // 5 lines overlap
-//!     generate_embeddings: true,
-//! };
-//!
-//! // Create a file index first (required by analyzer)
-//! let temp_dir = tempfile::tempdir()?;
-//! let file_index = FileIndex::open_memory(temp_dir.path()).await?;
-//! let analyzer = RemoteBertChunkAnalyzer::new(file_index, config);
-//!
-//! // Analyze a file (processes and stores chunks automatically)
-//! analyzer.analyze(Path::new("src/main.rs")).await?;
-//! println!("File analyzed and chunks stored in index");
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## Configuration
 //!

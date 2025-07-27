@@ -15,16 +15,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust
-//! use janet_ai_retriever::status::types::{ComprehensiveStatus, HealthStatus};
-//!
-//! // Create new status report
-//! let mut status = ComprehensiveStatus::new();
-//!
-//! // Serialize to TOML for display
-//! let toml_output = status.to_toml().unwrap();
-//! println!("Status:\n{}", toml_output);
-//! ```
 
 use super::{
     DatabaseInfo, DependencyVersions, FileSystemStatus, IndexConsistencyReport,

@@ -15,35 +15,6 @@
 //! ## Features
 //!
 //! ### Priority-Based Scheduling
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::task_queue::{TaskQueue, IndexingTask, TaskPriority, TaskType, TaskQueueConfig};
-//! use std::path::Path;
-//! use std::time::Duration;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let config = TaskQueueConfig {
-//!     max_queue_size: 1000,
-//!     max_workers: 4,
-//!     task_timeout: Duration::from_secs(30),
-//!     batch_size: 10,
-//!     batch_interval: Duration::from_millis(100),
-//! };
-//! let mut queue = TaskQueue::new(config);
-//!
-//! // High priority: recently modified files
-//! let high_priority_task = IndexingTask::new(
-//!     TaskType::IndexFile { path: Path::new("src/main.rs").to_path_buf() },
-//!     TaskPriority::High
-//! );
-//!
-//! // Background: routine indexing
-//! let background_task = IndexingTask::new(
-//!     TaskType::IndexFile { path: Path::new("docs/readme.md").to_path_buf() },
-//!     TaskPriority::Background
-//! );
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ### Work Distribution
 //! - Tasks are distributed across configurable worker count
@@ -59,23 +30,6 @@
 //!
 //! ## Configuration
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::task_queue::{TaskQueue, TaskQueueConfig};
-//! use std::time::Duration;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let config = TaskQueueConfig {
-//!     max_workers: 8,                    // More workers for faster processing
-//!     max_queue_size: 10000,             // Prevent memory overflow
-//!     task_timeout: Duration::from_secs(30),
-//!     batch_size: 16,                    // Batch size for efficiency
-//!     batch_interval: Duration::from_millis(100),
-//! };
-//!
-//! let queue = TaskQueue::new(config);
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## Integration
 //!

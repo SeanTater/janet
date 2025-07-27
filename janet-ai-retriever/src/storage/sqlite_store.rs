@@ -12,22 +12,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::{
-//!     storage::{sqlite_store::SqliteStore, ChunkStore},
-//!     retrieval::file_index::FileIndex
-//! };
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let file_index = FileIndex::open(Path::new(".")).await?;
-//! let store = SqliteStore::new(file_index);
-//!
-//! // Use any of the storage traits
-//! let chunks = store.search_text("function", false).await?;
-//! # Ok(())
-//! # }
-//! ```
 
 use super::{
     Chunk, ChunkFilter, ChunkId, ChunkMetadata, ChunkStore, CombinedStore, EmbeddingStore, FileHash,

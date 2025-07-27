@@ -47,45 +47,8 @@
 //! ## Features
 //!
 //! ### Model Compatibility Checking
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::enhanced_index::{EnhancedFileIndex, EmbeddingModelMetadata};
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let index = EnhancedFileIndex::open(Path::new(".")).await?;
-//!
-//! let model = EmbeddingModelMetadata::new(
-//!     "snowflake-arctic-embed-xs".to_string(),
-//!     "fastembed".to_string(),
-//!     384
-//! ).with_normalized(true);
-//!
-//! // Check if model is compatible with existing embeddings
-//! let compatible = index.check_model_compatibility(&model).await?;
-//! if !compatible {
-//!     // Need to re-embed with new model
-//!     index.delete_chunks_by_model(&model.model_id()).await?;
-//! }
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ### Multi-Model Support
-//! ```rust,no_run
-//! # use janet_ai_retriever::retrieval::enhanced_index::EnhancedFileIndex;
-//! # use std::path::Path;
-//! # async fn example() -> anyhow::Result<()> {
-//! let index = EnhancedFileIndex::open(Path::new(".")).await?;
-//!
-//! // Get chunks from a specific model
-//! let model_chunks = index.get_chunks_by_model("fastembed:snowflake-arctic-embed-xs:latest:384:norm").await?;
-//!
-//! // Search with similarity
-//! let query_embedding = vec![half::f16::from_f32(0.1); 384];
-//! let similar_chunks = index.search_similar_chunks(&query_embedding, 10).await?;
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## When to Use
 //!

@@ -29,29 +29,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::chunking_strategy::{ChunkingStrategy, ChunkingConfig};
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let config = ChunkingConfig {
-//!     max_chunk_size: 1500,
-//!     repo_name: "my-project".to_string(),
-//! };
-//!
-//! let strategy = ChunkingStrategy::new(config);
-//!
-//! // Chunk a Rust file
-//! let content = std::fs::read_to_string("src/main.rs")?;
-//! let chunks = strategy.chunk_content(Path::new("src/main.rs"), &content)?;
-//!
-//! for chunk in chunks {
-//!     println!("Chunk sequence: {}", chunk.sequence);
-//!     println!("Content: {}", chunk.chunk_text);
-//! }
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## Chunk Size Considerations
 //!

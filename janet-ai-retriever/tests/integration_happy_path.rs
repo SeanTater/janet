@@ -454,12 +454,6 @@ To use this repository:
 
 Here's how to use the add function:
 
-```rust
-use mylib::add;
-
-let result = add(2, 3);
-println!("Result: {}", result);
-```
 
 And here's a Python example:
 

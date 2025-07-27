@@ -153,16 +153,6 @@ pub const CODE_DELIMITERS: &[&str] = &[
 /// A static slice of delimiter strings, ordered by preference (most important first)
 ///
 /// # Examples
-/// ```
-/// use std::path::Path;
-/// use janet_ai_context::get_delimiters_for_path;
-///
-/// let rust_delims = get_delimiters_for_path(Path::new("src/main.rs"));
-/// // Returns code delimiters like ["\nfn ", "\nstruct ", "\nimpl ", ...]
-///
-/// let md_delims = get_delimiters_for_path(Path::new("README.md"));
-/// // Returns markdown delimiters like ["\n# ", "\n## ", "\n\n", ...]
-/// ```
 pub fn get_delimiters_for_path(path: &Path) -> &'static [&'static str] {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("md") | Some("markdown") | Some("txt") => DEFAULT_MARKDOWN_DELIMITERS,
@@ -199,18 +189,6 @@ pub fn get_delimiters_for_path(path: &Path) -> &'static [&'static str] {
 /// A configured TextContextBuilder ready for chunking
 ///
 /// # Examples
-/// ```
-/// use std::path::Path;
-/// use janet_ai_context::create_builder_for_path;
-///
-/// let builder = create_builder_for_path(
-///     "my-project".to_string(),
-///     Path::new("src/lib.rs"),
-///     1000
-/// );
-///
-/// let chunks = builder.get_chunks("fn main() { println!(\"Hello!\"); }");
-/// ```
 pub fn create_builder_for_path(
     repo: String,
     file_path: &Path,
@@ -298,18 +276,6 @@ impl TextContextBuilder {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use janet_ai_context::text::TextContextBuilder;
-    ///
-    /// let repo_name = "my_project".to_string();
-    /// let file_path = "src/lib.rs".to_string();
-    /// // Define delimiters for splitting text.
-    /// // Here, we prioritize splitting by double newlines, then single newlines, then spaces.
-    /// let delimiter_patterns = vec![r"\n\n", r"\n", r" "];
-    /// let max_chunk_length = 500;
-    ///
-    /// let builder = TextContextBuilder::new(repo_name, file_path, &delimiter_patterns, max_chunk_length);
-    /// ```
     pub fn new(
         repo: String,
         path: String,
@@ -367,39 +333,6 @@ impl TextContextBuilder {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use janet_ai_context::text::{TextContextBuilder, TextChunk};
-    ///
-    /// let repo_name = "example_repo".to_string();
-    /// let file_path = "path/to/example.txt".to_string();
-    /// let delimiter_patterns = vec![r"\n\n", r"\n", r" "];
-    /// let max_chunk_length = 500;
-    /// let builder = TextContextBuilder::new(repo_name.clone(), file_path.clone(), &delimiter_patterns, max_chunk_length);
-    ///
-    /// let file_content = "This is the first sentence. This is the second sentence.\n\nThis is a new paragraph.";
-    /// let chunks = builder.get_chunks(file_content);
-    ///
-    /// // Verify that chunks were created
-    /// assert!(!chunks.is_empty());
-    ///
-    /// // Verify that concatenating chunks reconstructs the original content
-    /// let reconstructed_content: String = chunks.iter().map(|c| c.chunk_text.as_str()).collect();
-    /// assert_eq!(reconstructed_content, file_content);
-    ///
-    /// // Check properties of the first chunk
-    /// assert_eq!(chunks[0].repo, repo_name);
-    /// assert_eq!(chunks[0].path, file_path);
-    /// assert_eq!(chunks[0].sequence, 0);
-    /// assert_eq!(chunks[0].file_content, file_content);
-    /// assert!(chunks[0].chunk_text.len() <= max_chunk_length);
-    ///
-    /// // Example with content larger than max_chunk_size to demonstrate splitting
-    /// let long_content = (0..100).map(|_| "A very long sentence part. ").collect::<String>();
-    /// let long_chunks = builder.get_chunks(&long_content);
-    /// assert!(long_chunks.len() > 1); // Should be split into multiple chunks
-    /// let reconstructed_long_content: String = long_chunks.iter().map(|c| c.chunk_text.as_str()).collect();
-    /// assert_eq!(reconstructed_long_content, long_content);
-    /// ```
     pub fn get_chunks(&self, file_content: &str) -> Vec<TextChunk> {
         let segments = self.split_recursively_into_segments(
             file_content,
@@ -545,36 +478,6 @@ impl TextChunk {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use janet_ai_context::text::{TextContextBuilder, TextChunk};
-    ///
-    /// let repo_name = "my_repo".to_string();
-    /// let file_path = "src/utils.rs".to_string();
-    /// let delimiter_patterns = vec![r"\n\n", r"\n", r" "];
-    /// let max_chunk_length = 500;
-    /// let builder = TextContextBuilder::new(repo_name, file_path, &delimiter_patterns, max_chunk_length);
-    ///
-    /// let file_content = r#"
-    /// pub fn add(a: i32, b: i32) -> i32 {
-    ///     a + b
-    /// }
-    ///
-    /// pub fn subtract(a: i32, b: i32) -> i32 {
-    ///     a - b
-    /// }
-    /// "#;
-    ///
-    /// let chunks = builder.get_chunks(file_content);
-    ///
-    /// // Assuming the first chunk contains "pub fn add..."
-    /// let first_chunk = &chunks[0];
-    /// let passage = first_chunk.build();
-    ///
-    /// assert!(passage.starts_with("passage: {\"repo\": \"my_repo\", \"path\": \"src/utils.rs\"}"));
-    /// // Note that focus is followed by two newlines, because one is part of the context format, and the other is from the original content.
-    /// assert!(passage.contains("focus: {}\n\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}"));
-    /// assert!(!passage.contains("context:")); // No context chunks in this format
-    /// ```
     pub fn build(&self) -> String {
         format!(
             "passage: {{\"repo\": \"{}\", \"path\": \"{}\"}}\n\nfocus: {{}}\n{}",

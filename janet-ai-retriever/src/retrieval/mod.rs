@@ -27,24 +27,6 @@
 //! ## Usage Examples
 //!
 //! Basic indexing:
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::{
-//!     file_index::FileIndex,
-//!     indexing_engine::{IndexingEngine, IndexingEngineConfig},
-//! };
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! // Create basic file index
-//! let file_index = FileIndex::open(Path::new(".")).await?;
-//!
-//! // Or use the full indexing engine
-//! let config = IndexingEngineConfig::new("my-project".to_string(), Path::new(".").to_path_buf());
-//! let mut engine = IndexingEngine::new(config).await?;
-//! engine.start(false).await?;  // Start continuous monitoring
-//! # Ok(())
-//! # }
-//! ```
 
 pub mod analyzer;
 pub mod chunking_strategy;

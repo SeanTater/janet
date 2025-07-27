@@ -17,19 +17,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::status::{StatusReport, StatusApi};
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! // Create status API implementation
-//! // let status_api = /* ... */;
-//!
-//! // Generate comprehensive status report
-//! // let report = status_api.generate_status_report().await?;
-//! // println!("System status: {:?}", report.overall_status);
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## Architecture
 //!

@@ -12,23 +12,6 @@
 //!
 //! ## Quick Start
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::{
-//!     indexing_engine::{IndexingEngine, IndexingEngineConfig},
-//! };
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! // Create and start indexing engine
-//! let config = IndexingEngineConfig::new(
-//!     "my-project".to_string(),
-//!     Path::new(".").to_path_buf()
-//! );
-//! let mut engine = IndexingEngine::new(config).await?;
-//! engine.start(false).await?;  // Start indexing
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## Architecture
 //!

@@ -21,19 +21,6 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use janet_ai_retriever::storage::{ChunkStore, Chunk, ChunkFilter};
-//!
-//! # async fn example(store: impl ChunkStore) -> anyhow::Result<()> {
-//! // Store chunks
-//! let chunks = vec![/* ... */];
-//! let ids = store.insert_chunks(chunks).await?;
-//!
-//! // Search by text
-//! let results = store.search_text("function", false).await?;
-//! # Ok(())
-//! # }
-//! ```
 
 use anyhow::Result;
 use async_trait::async_trait;

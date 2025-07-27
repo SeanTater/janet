@@ -40,53 +40,8 @@
 //! ## Usage
 //!
 //! ### Basic Indexing
-//! ```rust,no_run
-//! use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
-//! use std::path::Path;
-//!
-//! # async fn example() -> anyhow::Result<()> {
-//! let config = IndexingEngineConfig::new(
-//!     "my-project".to_string(),
-//!     Path::new(".").to_path_buf()
-//! )
-//! .with_max_workers(4)
-//! .with_chunk_size(1000);
-//!
-//! let mut engine = IndexingEngine::new(config).await?;
-//! engine.start(false).await?;  // Start continuous monitoring
-//!
-//! // Process pending work
-//! while engine.get_queue_size().await > 0 {
-//!     engine.process_pending_tasks().await?;
-//!     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-//! }
-//!
-//! let stats = engine.get_stats().await;
-//! println!("Processed {} files, created {} chunks",
-//!          stats.files_processed, stats.chunks_created);
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ### Read-Only Access
-//! ```rust,no_run
-//! # use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
-//! # use std::path::Path;
-//! # async fn example() -> anyhow::Result<()> {
-//! let config = IndexingEngineConfig::new(
-//!     "existing-project".to_string(),
-//!     Path::new(".").to_path_buf()
-//! );
-//!
-//! let engine = IndexingEngine::new(config).await?;
-//! // Engine starts in read-only mode by default
-//! let enhanced_index = engine.get_enhanced_index();
-//! let stats = enhanced_index.get_index_stats().await?;
-//! println!("Index contains {} files with {} chunks",
-//!          stats.files_count, stats.chunks_count);
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## Performance Considerations
 //!
