@@ -5,7 +5,6 @@ use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEng
 use janet_ai_retriever::storage::{ChunkStore, EmbeddingStore, sqlite_store::SqliteStore};
 use rmcp::schemars;
 use serde::Deserialize;
-use tempfile;
 use tracing::info;
 
 #[allow(dead_code)] // Used by rmcp macro system
@@ -154,11 +153,7 @@ async fn perform_semantic_search(
 /// Create an embedding provider for generating query embeddings
 async fn create_embedding_provider() -> AnyhowResult<FastEmbedProvider> {
     // Use a lightweight model suitable for MCP server usage
-    let temp_dir =
-        tempfile::tempdir().map_err(|e| anyhow::anyhow!("Failed to create temp dir: {}", e))?;
-    let config = EmbedConfig::default_with_path(temp_dir.path())
-        .with_batch_size(1)
-        .with_normalize(true);
+    let config = EmbedConfig::default();
 
     let provider = FastEmbedProvider::create(config)
         .await

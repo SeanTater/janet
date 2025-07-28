@@ -1,13 +1,11 @@
 //! Configuration for embedding models
 
 use crate::error::{EmbedError, Result};
-use derive_builder::Builder;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 /// Configuration for tokenizer files
-#[derive(Debug, Clone, Builder, Serialize)]
-#[builder(setter(into))]
+#[derive(Debug, Clone, Serialize)]
 pub struct TokenizerConfig {
     /// Path to the tokenizer.json file
     pub tokenizer_path: PathBuf,
@@ -16,22 +14,32 @@ pub struct TokenizerConfig {
     /// Path to the special_tokens_map.json file
     pub special_tokens_map_path: PathBuf,
     /// Path to the tokenizer_config.json file (optional, will generate minimal if missing)
-    #[builder(default)]
     pub tokenizer_config_path: Option<PathBuf>,
 }
 
 impl TokenizerConfig {
-    /// Create a new tokenizer configuration using the builder pattern.
+    /// Create a new tokenizer configuration with all required paths.
     ///
-    /// This returns a builder that allows you to set each field individually.
-    /// Use this when you need fine-grained control over tokenizer file paths.
+    /// # Arguments
+    /// * `tokenizer_path` - Path to the tokenizer.json file
+    /// * `config_path` - Path to the config.json file
+    /// * `special_tokens_map_path` - Path to the special_tokens_map.json file
+    /// * `tokenizer_config_path` - Optional path to tokenizer_config.json file
     ///
     /// # Returns
-    /// A builder instance for constructing TokenizerConfig
-    ///
-    /// # Example
-    pub fn builder() -> TokenizerConfigBuilder {
-        TokenizerConfigBuilder::default()
+    /// A new TokenizerConfig instance
+    pub fn new<P: AsRef<Path>>(
+        tokenizer_path: P,
+        config_path: P,
+        special_tokens_map_path: P,
+        tokenizer_config_path: Option<P>,
+    ) -> Self {
+        Self {
+            tokenizer_path: tokenizer_path.as_ref().to_path_buf(),
+            config_path: config_path.as_ref().to_path_buf(),
+            special_tokens_map_path: special_tokens_map_path.as_ref().to_path_buf(),
+            tokenizer_config_path: tokenizer_config_path.map(|p| p.as_ref().to_path_buf()),
+        }
     }
 
     /// Create a standard tokenizer configuration for a model directory.
@@ -51,13 +59,12 @@ impl TokenizerConfig {
     /// # Example
     pub fn standard<P: AsRef<Path>>(model_dir: P) -> Self {
         let model_dir = model_dir.as_ref();
-        TokenizerConfigBuilder::default()
-            .tokenizer_path(model_dir.join("tokenizer.json"))
-            .config_path(model_dir.join("config.json"))
-            .special_tokens_map_path(model_dir.join("special_tokens_map.json"))
-            .tokenizer_config_path(Some(model_dir.join("tokenizer_config.json")))
-            .build()
-            .expect("Failed to build TokenizerConfig")
+        Self {
+            tokenizer_path: model_dir.join("tokenizer.json"),
+            config_path: model_dir.join("config.json"),
+            special_tokens_map_path: model_dir.join("special_tokens_map.json"),
+            tokenizer_config_path: Some(model_dir.join("tokenizer_config.json")),
+        }
     }
 
     /// Create a tokenizer configuration with custom file paths.
@@ -84,12 +91,12 @@ impl TokenizerConfig {
         P2: AsRef<Path>,
         P3: AsRef<Path>,
     {
-        TokenizerConfigBuilder::default()
-            .tokenizer_path(tokenizer_path.as_ref())
-            .config_path(config_path.as_ref())
-            .special_tokens_map_path(special_tokens_map_path.as_ref())
-            .build()
-            .expect("Failed to build TokenizerConfig")
+        Self {
+            tokenizer_path: tokenizer_path.as_ref().to_path_buf(),
+            config_path: config_path.as_ref().to_path_buf(),
+            special_tokens_map_path: special_tokens_map_path.as_ref().to_path_buf(),
+            tokenizer_config_path: None,
+        }
     }
 
     /// Validate that all required tokenizer files exist on the filesystem.
@@ -136,107 +143,53 @@ impl TokenizerConfig {
 }
 
 /// Configuration for embedding models
-#[derive(Debug, Clone, Builder, Serialize)]
-#[builder(setter(into))]
-pub struct EmbedConfig {
-    /// Path to the base directory containing model files
-    #[builder(default = r#"PathBuf::from("models")"#)]
-    pub model_base_path: PathBuf,
-    /// Name of the embedding model to use
-    pub model_name: String,
-    /// HuggingFace model repository (e.g., "answerdotai/ModernBERT-large")
-    #[builder(default)]
-    pub hf_model_repo: Option<String>,
-    /// HuggingFace model revision/branch (e.g., "main")
-    #[builder(default = r#"Some("main".to_string())"#)]
-    pub hf_revision: Option<String>,
-    /// Maximum batch size for embedding generation
-    #[builder(default = "32")]
-    pub batch_size: usize,
-    /// Whether to normalize embeddings
-    #[builder(default = "true")]
-    pub normalize: bool,
-    /// Tokenizer configuration
-    pub tokenizer_config: TokenizerConfig,
+#[derive(Debug, Clone, Serialize)]
+pub enum EmbedConfig {
+    /// Local model configuration
+    Local {
+        /// Name of the embedding model to use
+        model_name: String,
+    },
+    /// HuggingFace model configuration
+    HuggingFace {
+        /// Name of the embedding model to use
+        model_name: String,
+    },
+}
+
+impl Default for EmbedConfig {
+    fn default() -> Self {
+        Self::modernbert_large()
+    }
 }
 
 impl EmbedConfig {
-    /// Creates a new builder for custom configuration. See module docs for usage examples.
-    pub fn builder() -> EmbedConfigBuilder {
-        EmbedConfigBuilder::default()
+    /// Get the standard model base path ($HOME/.janet/models)
+    fn model_base_path() -> PathBuf {
+        if let Some(home) = std::env::var_os("HOME") {
+            PathBuf::from(home).join(".janet").join("models")
+        } else {
+            PathBuf::from(".janet").join("models")
+        }
     }
 
-    /// Creates basic configuration with required parameters. See module docs for details.
-    pub fn new<P: AsRef<Path>>(
-        model_base_path: P,
-        model_name: impl Into<String>,
-        tokenizer_config: TokenizerConfig,
-    ) -> Self {
-        EmbedConfigBuilder::default()
-            .model_base_path(model_base_path.as_ref())
-            .model_name(model_name)
-            .hf_model_repo(None::<String>)
-            .tokenizer_config(tokenizer_config)
-            .build()
-            .expect("Failed to build EmbedConfig")
+    /// Creates basic local model configuration. See module docs for details.
+    pub fn new(model_name: impl Into<String>) -> Self {
+        Self::Local {
+            model_name: model_name.into(),
+        }
     }
 
     /// Creates configuration for HuggingFace model download. See module docs for details.
-    pub fn from_huggingface<P: AsRef<Path>>(
-        model_base_path: P,
-        model_name: impl Into<String>,
-        hf_repo: impl Into<String>,
-        tokenizer_config: TokenizerConfig,
-    ) -> Self {
-        EmbedConfigBuilder::default()
-            .model_base_path(model_base_path.as_ref())
-            .model_name(model_name)
-            .hf_model_repo(Some(hf_repo.into()))
-            .batch_size(16usize) // Smaller batch for larger models
-            .tokenizer_config(tokenizer_config)
-            .build()
-            .expect("Failed to build EmbedConfig")
-    }
-
-    /// Creates default configuration with Arctic Embed XS model. See module docs for details.
-    pub fn default_with_path<P: AsRef<Path>>(model_base_path: P) -> Self {
-        let model_dir = model_base_path.as_ref().join("snowflake-arctic-embed-xs");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
-        Self::new(
-            model_base_path,
-            "snowflake-arctic-embed-xs",
-            tokenizer_config,
-        )
+    pub fn from_huggingface(model_name: impl Into<String>) -> Self {
+        Self::HuggingFace {
+            model_name: model_name.into(),
+        }
     }
 
     /// Creates configuration for ModernBERT-large model from HuggingFace. See module docs for details.
-    pub fn modernbert_large<P: AsRef<Path>>(model_base_path: P) -> Self {
-        let model_dir = model_base_path.as_ref().join("ModernBERT-large");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
-        Self::from_huggingface(
-            model_base_path,
-            "ModernBERT-large",
-            "answerdotai/ModernBERT-large",
-            tokenizer_config,
-        )
-    }
-
-    /// Sets batch size for embedding generation. See module docs for usage examples.
-    pub fn with_batch_size(self, batch_size: usize) -> Self {
-        Self { batch_size, ..self }
-    }
-
-    /// Sets embedding normalization. See module docs for usage examples.
-    pub fn with_normalize(self, normalize: bool) -> Self {
-        Self { normalize, ..self }
-    }
-
-    /// Set the HuggingFace revision (builder style)
-    pub fn with_revision<S: Into<String>>(self, revision: S) -> Self {
-        Self {
-            hf_revision: Some(revision.into()),
-            ..self
-        }
+    pub fn modernbert_large() -> Self {
+        Self::from_huggingface("ModernBERT-large")
     }
 
     /// Get the full path where this model's files are stored.
@@ -249,7 +202,7 @@ impl EmbedConfig {
     ///
     /// # Example
     pub fn model_path(&self) -> PathBuf {
-        self.model_base_path.join(&self.model_name)
+        Self::model_base_path().join(self.model_name())
     }
 
     /// Get the path to the ONNX model file (ModernBERT uses model_q4.onnx)
@@ -266,9 +219,16 @@ impl EmbedConfig {
         model_dir.join("onnx").join("model_quantized.onnx")
     }
 
-    /// Get the tokenizer configuration
-    pub fn tokenizer_config(&self) -> &TokenizerConfig {
-        &self.tokenizer_config
+    /// Get the tokenizer configuration (auto-generated from model path)
+    pub fn tokenizer_config(&self) -> TokenizerConfig {
+        TokenizerConfig::standard(self.model_path())
+    }
+
+    /// Get the model name
+    pub fn model_name(&self) -> &str {
+        match self {
+            Self::Local { model_name } | Self::HuggingFace { model_name } => model_name,
+        }
     }
 
     /// Check if this configuration is set up for a HuggingFace model.
@@ -281,17 +241,26 @@ impl EmbedConfig {
     ///
     /// # Example
     pub fn is_huggingface_model(&self) -> bool {
-        self.hf_model_repo.is_some()
+        matches!(self, Self::HuggingFace { .. })
     }
 
-    /// Get the HuggingFace repository name
+    /// Get the HuggingFace repository name (inferred from model name)
     pub fn hf_repo(&self) -> Option<&str> {
-        self.hf_model_repo.as_deref()
+        match self {
+            Self::Local { .. } => None,
+            Self::HuggingFace { model_name } => {
+                // Map common model names to their repos
+                match model_name.as_str() {
+                    "ModernBERT-large" => Some("answerdotai/ModernBERT-large"),
+                    _ => Some("unknown/repo"), // Fallback
+                }
+            }
+        }
     }
 
-    /// Get the HuggingFace revision
+    /// Get the HuggingFace revision (always "main")
     pub fn hf_revision(&self) -> &str {
-        self.hf_revision.as_deref().unwrap_or("main")
+        "main"
     }
 
     /// Validate that all required model files exist
@@ -304,23 +273,10 @@ impl EmbedConfig {
         }
 
         // Validate tokenizer configuration
-        self.tokenizer_config.validate()?;
+        self.tokenizer_config().validate()?;
 
-        tracing::debug!("Model validation successful for: {}", self.model_name);
+        tracing::debug!("Model validation successful for: {}", self.model_name());
         Ok(())
-    }
-}
-
-impl Default for EmbedConfig {
-    fn default() -> Self {
-        let model_dir = PathBuf::from("models").join("snowflake-arctic-embed-xs");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
-        EmbedConfigBuilder::default()
-            .model_name("snowflake-arctic-embed-xs")
-            .hf_model_repo(None::<String>)
-            .tokenizer_config(tokenizer_config)
-            .build()
-            .expect("Failed to build default EmbedConfig")
     }
 }
 
@@ -331,94 +287,85 @@ mod tests {
 
     #[test]
     fn test_config_creation() {
-        let temp_dir = tempdir().unwrap();
-        let model_dir = temp_dir.path().join("test-model");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
-        let config = EmbedConfig::new(temp_dir.path(), "test-model", tokenizer_config);
+        let config = EmbedConfig::new("test-model");
 
-        assert_eq!(config.model_name, "test-model");
-        assert_eq!(config.batch_size, 32);
-        assert!(config.normalize);
-        assert_eq!(config.model_path(), temp_dir.path().join("test-model"));
+        assert_eq!(config.model_name(), "test-model");
+        assert_eq!(
+            config.model_path(),
+            EmbedConfig::model_base_path().join("test-model")
+        );
+        assert!(!config.is_huggingface_model());
     }
 
     #[test]
     fn test_config_paths() {
-        let temp_dir = tempdir().unwrap();
-        let model_dir = temp_dir.path().join("test-model");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
-        let config = EmbedConfig::new(temp_dir.path(), "test-model", tokenizer_config);
+        let config = EmbedConfig::new("test-model");
 
-        let expected_base = temp_dir.path().join("test-model");
+        let expected_base = EmbedConfig::model_base_path().join("test-model");
         assert_eq!(
             config.onnx_model_path(),
             expected_base.join("onnx").join("model_quantized.onnx")
         );
         assert_eq!(
-            config.tokenizer_config.tokenizer_path,
+            config.tokenizer_config().tokenizer_path,
             expected_base.join("tokenizer.json")
         );
         assert_eq!(
-            config.tokenizer_config.config_path,
+            config.tokenizer_config().config_path,
             expected_base.join("config.json")
         );
         assert_eq!(
-            config.tokenizer_config.special_tokens_map_path,
+            config.tokenizer_config().special_tokens_map_path,
             expected_base.join("special_tokens_map.json")
         );
     }
 
     #[test]
-    fn test_config_builder_methods() {
-        let temp_dir = tempdir().unwrap();
-        let model_dir = temp_dir.path().join("test-model");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
-        let config = EmbedConfig::new(temp_dir.path(), "test-model", tokenizer_config)
-            .with_batch_size(64)
-            .with_normalize(false);
+    fn test_config_defaults() {
+        let config = EmbedConfig::new("test-model");
 
-        assert_eq!(config.batch_size, 64);
-        assert!(!config.normalize);
+        // All values are now static/inferred
+        assert_eq!(config.model_name(), "test-model");
+        assert_eq!(config.hf_revision(), "main");
+        assert!(!config.is_huggingface_model());
+
+        // Test default is ModernBERT
+        let default_config = EmbedConfig::default();
+        assert_eq!(default_config.model_name(), "ModernBERT-large");
+        assert!(default_config.is_huggingface_model());
     }
 
     #[test]
-    fn test_derive_builder_pattern() {
-        let temp_dir = tempdir().unwrap();
-        let model_dir = temp_dir.path().join("custom-model");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
+    fn test_direct_enum_construction() {
+        // Test using direct enum construction for local model
+        let local_config = EmbedConfig::Local {
+            model_name: "custom-model".to_string(),
+        };
 
-        // Test using the builder directly
-        let config = EmbedConfig::builder()
-            .model_base_path(temp_dir.path())
-            .model_name("custom-model")
-            .batch_size(128usize)
-            .normalize(false)
-            .tokenizer_config(tokenizer_config)
-            .build()
-            .unwrap();
+        assert_eq!(local_config.model_name(), "custom-model");
+        assert!(!local_config.is_huggingface_model());
 
-        assert_eq!(config.model_name, "custom-model");
-        assert_eq!(config.batch_size, 128);
-        assert!(!config.normalize);
-        assert_eq!(config.hf_revision, Some("main".to_string()));
+        // Test using direct enum construction for HuggingFace model
+        let hf_config = EmbedConfig::HuggingFace {
+            model_name: "ModernBERT-large".to_string(),
+        };
+
+        assert_eq!(hf_config.model_name(), "ModernBERT-large");
+        assert!(hf_config.is_huggingface_model());
+        assert_eq!(hf_config.hf_repo(), Some("answerdotai/ModernBERT-large"));
     }
 
     #[test]
-    fn test_builder_defaults() {
-        let model_dir = PathBuf::from("models").join("test-model");
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
+    fn test_constructor_defaults() {
+        // Test that new() method sets correct defaults
+        let config = EmbedConfig::new("test-model");
 
-        // Test that defaults work correctly
-        let config = EmbedConfig::builder()
-            .model_name("test-model")
-            .tokenizer_config(tokenizer_config)
-            .build()
-            .unwrap();
-
-        assert_eq!(config.model_base_path, PathBuf::from("models"));
-        assert_eq!(config.batch_size, 32);
-        assert!(config.normalize);
-        assert_eq!(config.hf_revision, Some("main".to_string()));
+        assert_eq!(
+            config.model_path(),
+            EmbedConfig::model_base_path().join("test-model")
+        );
+        assert_eq!(config.hf_revision(), "main");
+        assert!(!config.is_huggingface_model());
     }
 
     #[test]

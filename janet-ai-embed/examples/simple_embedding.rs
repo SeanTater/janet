@@ -11,15 +11,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("==========================================");
 
     // Create configuration for a built-in model
-    let temp_dir = tempfile::tempdir()?;
-    let config = EmbedConfig::default_with_path(temp_dir.path())
-        .with_batch_size(2)
-        .with_normalize(true);
+    let config = EmbedConfig::default();
 
     println!("📝 Creating FastEmbed provider with config:");
-    println!("   Model: {}", config.model_name);
-    println!("   Batch size: {}", config.batch_size);
-    println!("   Normalize: {}", config.normalize);
+    println!("   Model: {}", config.model_name());
 
     // Create and initialize the provider
     let provider = FastEmbedProvider::create(config).await?;

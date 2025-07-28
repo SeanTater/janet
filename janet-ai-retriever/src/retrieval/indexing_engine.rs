@@ -261,16 +261,16 @@ impl IndexingEngine {
             if let Some(embed_config) = &config.embedding_config {
                 info!(
                     "Initializing embedding provider: {}",
-                    embed_config.model_name
+                    embed_config.model_name()
                 );
 
                 let provider = FastEmbedProvider::create(embed_config.clone()).await?;
                 let metadata = EmbeddingModelMetadata::new(
-                    embed_config.model_name.clone(),
+                    embed_config.model_name().to_string(),
                     "fastembed".to_string(),
                     provider.embedding_dimension(),
                 )
-                .with_normalized(embed_config.normalize);
+                .with_normalized(true);
 
                 // Register the model in the database
                 enhanced_index.register_embedding_model(&metadata).await?;
@@ -456,6 +456,17 @@ impl IndexingEngine {
             });
         }
 
+        // Check if file needs reindexing based on modification time
+        if !enhanced_index.file_needs_reindexing(file_path).await? {
+            debug!("File {} is up to date, skipping", file_path.display());
+            return Ok(FileProcessingResult {
+                file_path: file_path.to_path_buf(),
+                chunks_created: 0,
+                embeddings_generated: 0,
+                processing_time: start_time.elapsed(),
+            });
+        }
+
         // Read file content
         let content = tokio::fs::read_to_string(file_path)
             .await
@@ -464,11 +475,19 @@ impl IndexingEngine {
         // Generate file hash
         let file_hash = *blake3::hash(content.as_bytes()).as_bytes();
 
+        // Get file modification time
+        let metadata = tokio::fs::metadata(file_path).await?;
+        let modified_at = metadata
+            .modified()?
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
+
         // Create file reference
         let file_ref = FileRef {
             relative_path: file_path.to_string_lossy().to_string(),
             content: content.as_bytes().to_vec(),
             hash: file_hash,
+            modified_at,
         };
 
         // Store file in database

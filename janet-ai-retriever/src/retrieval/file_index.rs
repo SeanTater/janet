@@ -70,6 +70,8 @@ pub struct FileRef {
     pub content: Vec<u8>,
     /// The blake3 hash of the file
     pub hash: [u8; 32],
+    /// Last modification time of the file (Unix timestamp)
+    pub modified_at: i64,
 }
 
 /// Reference to a text chunk stored in the index database.
@@ -214,7 +216,7 @@ impl FileIndex {
         sqlx::query(
             r#"
             INSERT INTO files (hash, relative_path, size, modified_at, indexed_at)
-            VALUES (?1, ?2, ?3, datetime('now'), datetime('now'))
+            VALUES (?1, ?2, ?3, datetime(?4, 'unixepoch'), datetime('now'))
             ON CONFLICT(hash) DO UPDATE SET
                 relative_path = excluded.relative_path,
                 size = excluded.size,
@@ -225,28 +227,31 @@ impl FileIndex {
         .bind(&file_ref.hash[..])
         .bind(&file_ref.relative_path)
         .bind(file_ref.content.len() as i64)
+        .bind(file_ref.modified_at)
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
-    /// Retrieves file record by content hash. See module docs for schema details.
-    pub async fn get_file(&self, hash: &[u8; 32]) -> Result<Option<FileRef>> {
-        let row = sqlx::query("SELECT hash, relative_path, size FROM files WHERE hash = ?1")
-            .bind(&hash[..])
-            .fetch_optional(&self.pool)
-            .await?;
+    /// Check if a file needs reindexing by comparing modification times.
+    pub async fn file_needs_reindexing(&self, file_path: &Path) -> Result<bool> {
+        let metadata = tokio::fs::metadata(file_path).await?;
+        let file_modified_at = metadata
+            .modified()?
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
 
-        if let Some(row) = row {
-            let relative_path: String = row.get("relative_path");
-            // Note: We're not storing content in DB, would need to read from filesystem
-            Ok(Some(FileRef {
-                relative_path,
-                content: Vec::new(), // Would need to read from disk
-                hash: *hash,
-            }))
-        } else {
-            Ok(None)
+        let relative_path = file_path.to_string_lossy().to_string();
+        let stored_modified_at = sqlx::query_scalar::<_, Option<i64>>(
+            "SELECT strftime('%s', modified_at) FROM files WHERE relative_path = ?1",
+        )
+        .bind(&relative_path)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match stored_modified_at {
+            Some(Some(stored_time)) => Ok(file_modified_at > stored_time),
+            _ => Ok(true), // File not in database or null timestamp, needs indexing
         }
     }
 
@@ -528,17 +533,13 @@ mod tests {
             relative_path: "test/file.rs".to_string(),
             content: b"fn main() {}\n".to_vec(),
             hash: [1; 32],
+            modified_at: 1640995200,
         };
 
         // Insert file
         index.upsert_file(&file_ref).await?;
 
-        // Retrieve file
-        let fetched = index.get_file(&[1; 32]).await?;
-        assert!(fetched.is_some());
-        let fetched = fetched.unwrap();
-        assert_eq!(fetched.relative_path, "test/file.rs");
-        assert_eq!(fetched.hash, [1; 32]);
+        // File was inserted successfully
 
         Ok(())
     }
@@ -554,6 +555,7 @@ mod tests {
             relative_path: "test/file.rs".to_string(),
             content: b"fn main() {}\nfn test() {}".to_vec(),
             hash: [2; 32],
+            modified_at: 1640995200,
         };
         index.upsert_file(&file_ref).await?;
 
@@ -619,6 +621,7 @@ mod tests {
             relative_path: "test/file.rs".to_string(),
             content: b"fn main() {}".to_vec(),
             hash: [3; 32],
+            modified_at: 1640995200,
         };
         index.upsert_file(&file_ref).await?;
 
@@ -644,18 +647,6 @@ mod tests {
         // Verify chunks are gone
         let fetched_after = index.get_chunks(&[3; 32]).await?;
         assert_eq!(fetched_after.len(), 0);
-
-        Ok(())
-    }
-
-    /// Test non-existent file
-    #[tokio::test]
-    async fn test_get_non_existent_file() -> Result<()> {
-        let temp_dir = tempdir()?;
-        let index = FileIndex::open_memory(temp_dir.path()).await?;
-
-        let fetched = index.get_file(&[99; 32]).await?;
-        assert!(fetched.is_none());
 
         Ok(())
     }
