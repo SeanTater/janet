@@ -3,13 +3,13 @@ use anyhow::Result;
 use ignore::WalkBuilder;
 use regex::Regex;
 use rmcp::schemars;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tokio::fs;
 use tracing::{info, warn};
 
 #[allow(dead_code)] // Used by rmcp macro system
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RegexSearchRequest {
     #[schemars(description = "Regular expression pattern to search for")]
     pub pattern: String,

@@ -89,7 +89,7 @@
 //! ```
 
 mod server;
-mod tools;
+pub mod tools;
 
 use server::JanetMcpServer;
 

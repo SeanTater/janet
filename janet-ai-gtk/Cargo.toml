@@ -1,0 +1,22 @@
+[package]
+name = "janet-ai-gtk"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "janet-ai-gtk"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.97"
+chrono = { version = "0.4", features = ["serde"] }
+gtk4 = "0.9"
+janet-ai-mcp = { path = "../janet-ai-mcp" }
+janet-ai-retriever = { path = "../janet-ai-retriever" }
+relm4 = "0.9"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.44.1", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["fmt"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
