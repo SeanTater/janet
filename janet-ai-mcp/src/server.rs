@@ -91,7 +91,10 @@ impl JanetMcpServer {
         let indexing_config =
             IndexingEngineConfig::new("local".to_string(), config.root_dir.clone())
                 .with_max_workers(4);
-        let indexing_engine = IndexingEngine::new(indexing_config.clone()).await?;
+        let mut indexing_engine = IndexingEngine::new(indexing_config.clone()).await?;
+
+        // Start the indexing engine with full reindex to populate the database
+        indexing_engine.start(true).await?;
 
         Ok(Self {
             config,

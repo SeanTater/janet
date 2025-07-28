@@ -51,8 +51,8 @@
 
 use super::file_index::{ChunkRef, FileIndex, FileRef};
 use anyhow::Result;
-use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider, TokenizerConfig};
-use std::path::{Path, PathBuf};
+use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider};
+use std::path::Path;
 
 /// Configuration for the BERT-based chunk analyzer.
 ///
@@ -112,17 +112,13 @@ impl FileAnalyzer {
             return Ok(());
         }
 
-        let model_base_path = self.config.model_base_path.as_deref().unwrap_or("models");
         let model_name = self
             .config
             .model_name
             .as_deref()
             .unwrap_or("snowflake-arctic-embed-xs");
 
-        let model_dir = PathBuf::from(model_base_path).join(model_name);
-        let tokenizer_config = TokenizerConfig::standard(&model_dir);
-        let embed_config =
-            EmbedConfig::new(model_base_path, model_name, tokenizer_config).with_batch_size(16); // Smaller batch size for better responsiveness
+        let embed_config = EmbedConfig::new(model_name);
 
         match FastEmbedProvider::create(embed_config).await {
             Ok(provider) => {
@@ -171,11 +167,19 @@ impl FileAnalyzer {
         let buf = String::from_utf8_lossy(&buf);
         let lines = buf.lines().collect::<Vec<_>>();
 
+        // Get file modification time
+        let metadata = tokio::fs::metadata(loc).await?;
+        let modified_at = metadata
+            .modified()?
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
+
         // Store file reference in database
         let file_ref = FileRef {
             relative_path: relative_path.to_string_lossy().to_string(),
             content: buf.as_bytes().to_vec(),
             hash: file_hash,
+            modified_at,
         };
         self.file_index.upsert_file(&file_ref).await?;
 

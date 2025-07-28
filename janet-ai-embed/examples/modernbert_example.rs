@@ -17,15 +17,11 @@ async fn main() -> Result<()> {
     println!("📁 Using model cache directory: {cache_dir}");
 
     // Create configuration for ModernBERT-large
-    let config = EmbedConfig::modernbert_large(&cache_dir)
-        .with_batch_size(4)
-        .with_normalize(true);
+    let config = EmbedConfig::modernbert_large();
 
     println!("📝 Creating FastEmbed provider with ModernBERT-large:");
-    println!("   Model: {}", config.model_name);
+    println!("   Model: {}", config.model_name());
     println!("   HF Repo: {}", config.hf_repo().unwrap_or("N/A"));
-    println!("   Batch size: {}", config.batch_size);
-    println!("   Normalize: {}", config.normalize);
 
     // Create and initialize the provider (this will download the model if needed)
     println!("\n⬇️  Downloading and initializing ModernBERT-large model...");

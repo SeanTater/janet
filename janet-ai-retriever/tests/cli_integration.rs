@@ -30,11 +30,13 @@ async fn populate_test_data(temp_dir: &TempDir) -> Result<()> {
             relative_path: "src/main.rs".to_string(),
             content: b"fn main() {\n    println!(\"Hello, world!\");\n}".to_vec(),
             hash: [1; 32],
+            modified_at: 0,
         },
         FileRef {
             relative_path: "src/lib.rs".to_string(),
             content: b"pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}".to_vec(),
             hash: [2; 32],
+            modified_at: 0,
         },
     ];
 

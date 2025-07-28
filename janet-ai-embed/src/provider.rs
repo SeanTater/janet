@@ -1,7 +1,7 @@
 //! Embedding provider implementations
 
 use crate::config::EmbedConfig;
-use crate::downloader::ModelDownloader;
+use crate::downloader::download_model;
 use crate::error::{EmbedError, Result};
 use async_trait::async_trait;
 use fastembed::{
@@ -123,7 +123,7 @@ impl FastEmbedProvider {
     pub async fn initialize(&mut self) -> Result<()> {
         tracing::info!(
             "Initializing FastEmbed provider for model: {}",
-            self.config.model_name
+            self.config.model_name().to_string()
         );
 
         // Create a cache key based on the model configuration
@@ -149,7 +149,7 @@ impl FastEmbedProvider {
         };
 
         if let Some((cached_model, cached_dimension)) = cached_data {
-            tracing::info!("Using cached model for: {}", self.config.model_name);
+            tracing::info!("Using cached model for: {}", self.config.model_name());
             self.model = Some(cached_model);
             self.dimension = cached_dimension;
             return self.validate_model().await;
@@ -157,9 +157,11 @@ impl FastEmbedProvider {
 
         // Check if this is a HuggingFace model that needs downloading
         if self.config.is_huggingface_model() {
-            tracing::info!("Downloading HuggingFace model: {}", self.config.model_name);
-            let downloader = ModelDownloader::new();
-            downloader.ensure_model(&self.config).await?;
+            tracing::info!(
+                "Downloading HuggingFace model: {}",
+                self.config.model_name()
+            );
+            download_model(&self.config).await?;
 
             // Try to load the user-defined model
             let (model, dimension) = self.load_user_defined_model().await?;
@@ -174,13 +176,16 @@ impl FastEmbedProvider {
             self.model = Some(model_arc);
             self.dimension = dimension;
         } else {
-            tracing::info!("Using built-in fastembed model: {}", self.config.model_name);
+            tracing::info!(
+                "Using built-in fastembed model: {}",
+                self.config.model_name()
+            );
 
             // Load model in a blocking task
             let config = self.config.clone();
             let (model, dimension) =
                 tokio::task::spawn_blocking(move || -> Result<(TextEmbedding, usize)> {
-                    tracing::info!("Loading embedding model: {}", config.model_name);
+                    tracing::info!("Loading embedding model: {}", config.model_name());
 
                     let init_options = InitOptions::new(EmbeddingModel::AllMiniLML6V2)
                         .with_show_download_progress(true);
@@ -238,14 +243,14 @@ impl FastEmbedProvider {
 
     /// Load a user-defined ONNX model from downloaded HuggingFace files
     async fn load_user_defined_model(&self) -> Result<(TextEmbedding, usize)> {
-        tracing::info!("Loading user-defined model: {}", self.config.model_name);
+        tracing::info!("Loading user-defined model: {}", self.config.model_name());
 
         // Read all required files
         let onnx_file = fs::read(self.config.onnx_model_path())
             .await
             .map_err(|e| EmbedError::Io { source: e })?;
 
-        let tokenizer_config = &self.config.tokenizer_config;
+        let tokenizer_config = self.config.tokenizer_config();
 
         let tokenizer_file = fs::read(&tokenizer_config.tokenizer_path)
             .await
@@ -260,7 +265,7 @@ impl FastEmbedProvider {
             .map_err(|e| EmbedError::Io { source: e })?;
 
         // Check if tokenizer_config.json exists, create a minimal one if not
-        let tokenizer_config_file = if let Some(ref path) = tokenizer_config.tokenizer_config_path {
+        let tokenizer_config_file = if let Some(path) = &tokenizer_config.tokenizer_config_path {
             if path.exists() {
                 fs::read(path)
                     .await
@@ -300,7 +305,7 @@ impl FastEmbedProvider {
         let user_model = UserDefinedEmbeddingModel::new(onnx_file, tokenizer_files);
 
         // Load the model in a blocking task
-        let config_name = self.config.model_name.clone();
+        let config_name = self.config.model_name().to_string();
         let (model, dimension) =
             tokio::task::spawn_blocking(move || -> Result<(TextEmbedding, usize)> {
                 tracing::info!("Initializing user-defined model: {}", config_name);
@@ -376,7 +381,7 @@ impl FastEmbedProvider {
             }
         }
 
-        tracing::debug!("Model validation passed for: {}", self.config.model_name);
+        tracing::debug!("Model validation passed for: {}", self.config.model_name());
         Ok(())
     }
 
@@ -403,17 +408,15 @@ impl FastEmbedProvider {
                 let mut f16_embedding: Vec<f16> =
                     embedding.into_iter().map(f16::from_f32).collect();
 
-                // Normalize if configured
-                if self.config.normalize {
-                    let norm: f32 = f16_embedding
-                        .iter()
-                        .map(|x| x.to_f32() * x.to_f32())
-                        .sum::<f32>()
-                        .sqrt();
-                    if norm > 0.0 {
-                        for value in &mut f16_embedding {
-                            *value = f16::from_f32(value.to_f32() / norm);
-                        }
+                // Always normalize
+                let norm: f32 = f16_embedding
+                    .iter()
+                    .map(|x| x.to_f32() * x.to_f32())
+                    .sum::<f32>()
+                    .sqrt();
+                if norm > 0.0 {
+                    for value in &mut f16_embedding {
+                        *value = f16::from_f32(value.to_f32() / norm);
                     }
                 }
 
@@ -447,7 +450,7 @@ impl EmbeddingProvider for FastEmbedProvider {
         tracing::debug!("Generating embeddings for {} texts", texts.len());
 
         // Process in batches to avoid memory issues
-        let batch_size = self.config.batch_size;
+        let batch_size = 16;
         let mut all_embeddings = Vec::new();
 
         for chunk in texts.chunks(batch_size) {
@@ -487,7 +490,6 @@ impl EmbeddingProvider for FastEmbedProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn test_embedding_result() {
@@ -504,8 +506,7 @@ mod tests {
 
     #[test]
     fn test_fastembed_provider_creation() {
-        let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::default_with_path(temp_dir.path());
+        let config = EmbedConfig::default();
         let provider = FastEmbedProvider::new(config);
 
         assert_eq!(provider.provider_name(), "fastembed");
@@ -514,40 +515,219 @@ mod tests {
 
     #[tokio::test]
     async fn test_modernbert_config() {
-        let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::modernbert_large(temp_dir.path());
+        let config = EmbedConfig::modernbert_large();
 
-        assert_eq!(config.model_name, "ModernBERT-large");
+        assert_eq!(config.model_name(), "ModernBERT-large");
         assert_eq!(config.hf_repo(), Some("answerdotai/ModernBERT-large"));
         assert_eq!(config.hf_revision(), "main");
         assert!(config.is_huggingface_model());
     }
 
     #[tokio::test]
-    async fn test_model_caching() -> Result<()> {
-        // Clear cache before test
+    #[ignore] // Integration test: Downloads real ModernBERT model, tests embeddings - run with: cargo test test_modernbert_download_and_embedding -- --ignored
+    async fn test_modernbert_download_and_embedding() -> Result<()> {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .try_init()
+            .ok(); // Ignore if already initialized
+
+        println!("🧪 Testing ModernBERT-large download and embedding generation...");
+        println!("📂 Will use real cache directory: $HOME/.janet/models");
+
+        // Clear any existing cache to ensure clean test
         FastEmbedProvider::clear_cache();
         assert_eq!(FastEmbedProvider::cache_size(), 0);
 
-        let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(1);
+        // Create ModernBERT config
+        let config = EmbedConfig::modernbert_large();
+        println!("📋 Config: {config:?}");
 
-        // Create first provider - should load model
-        let _provider1 = FastEmbedProvider::create(config.clone()).await?;
+        // Verify config properties
+        assert_eq!(config.model_name(), "ModernBERT-large");
+        assert!(config.is_huggingface_model());
+        assert_eq!(config.hf_repo(), Some("answerdotai/ModernBERT-large"));
+        assert_eq!(config.hf_revision(), "main");
+
+        let expected_model_path = config.model_path();
+        println!("📁 Expected model path: {}", expected_model_path.display());
+
+        // Check if model already exists (may have been downloaded by previous test runs)
+        let model_existed_initially = expected_model_path.exists();
+        if model_existed_initially {
+            println!("ℹ️  Model already exists (cached from previous run)");
+        } else {
+            println!("📦 Model not found, will download");
+        }
+
+        // Create provider - this should trigger download
+        println!("⬇️  Creating provider (will download model)...");
+        let start_time = std::time::Instant::now();
+
+        let provider = FastEmbedProvider::create(config.clone()).await?;
+
+        let download_time = start_time.elapsed();
+        println!("✅ Provider created in {:.2}s", download_time.as_secs_f64());
+
+        // Verify model was cached
         assert_eq!(FastEmbedProvider::cache_size(), 1);
 
-        // Create second provider with same config - should use cache
-        let _provider2 = FastEmbedProvider::create(config).await?;
-        assert_eq!(FastEmbedProvider::cache_size(), 1); // Still 1, reused from cache
+        // Verify model files exist (either downloaded now or from previous runs)
+        assert!(
+            expected_model_path.exists(),
+            "Model directory should exist after provider creation"
+        );
+        assert!(
+            config.onnx_model_path().exists(),
+            "ONNX model file should exist"
+        );
 
-        // Create provider with different config - should create new cache entry
-        let config2 = EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(2); // Different batch size
-        let _provider3 = FastEmbedProvider::create(config2).await?;
-        assert_eq!(FastEmbedProvider::cache_size(), 2);
+        let tokenizer_config = config.tokenizer_config();
+        assert!(
+            tokenizer_config.tokenizer_path.exists(),
+            "Tokenizer file should exist"
+        );
+        assert!(
+            tokenizer_config.config_path.exists(),
+            "Config file should exist"
+        );
+        assert!(
+            tokenizer_config.special_tokens_map_path.exists(),
+            "Special tokens map should exist"
+        );
 
-        // Clear cache
+        // Test provider properties
+        assert_eq!(provider.provider_name(), "fastembed");
+        assert_eq!(provider.embedding_dimension(), 1024); // ModernBERT-large dimension
+
+        // Test single text embedding
+        println!("🔤 Testing single text embedding...");
+        let test_text = "ModernBERT is a state-of-the-art transformer model for efficient text embedding generation.";
+
+        let embedding = provider.embed_text(test_text).await?;
+        assert_eq!(
+            embedding.len(),
+            1024,
+            "Single embedding should have correct dimension"
+        );
+
+        // Verify embedding values are reasonable (not all zeros, finite)
+        assert!(
+            embedding.iter().any(|&x| x.to_f32() != 0.0),
+            "Embedding should not be all zeros"
+        );
+        assert!(
+            embedding.iter().all(|&x| x.to_f32().is_finite()),
+            "All embedding values should be finite"
+        );
+
+        // Test batch embedding
+        println!("📚 Testing batch embedding...");
+        let test_texts = vec![
+            "Machine learning models process natural language efficiently.".to_string(),
+            "Deep neural networks enable semantic understanding of text.".to_string(),
+            "Transformer architectures revolutionized natural language processing.".to_string(),
+        ];
+
+        let batch_result = provider.embed_texts(&test_texts).await?;
+        assert_eq!(
+            batch_result.len(),
+            3,
+            "Should generate embeddings for all input texts"
+        );
+        assert_eq!(
+            batch_result.dimension, 1024,
+            "Batch result should have correct dimension"
+        );
+
+        // Verify all batch embeddings
+        for (i, embedding) in batch_result.embeddings.iter().enumerate() {
+            assert_eq!(
+                embedding.len(),
+                1024,
+                "Batch embedding {i} should have correct dimension"
+            );
+            assert!(
+                embedding.iter().any(|&x| x.to_f32() != 0.0),
+                "Batch embedding {i} should not be all zeros"
+            );
+            assert!(
+                embedding.iter().all(|&x| x.to_f32().is_finite()),
+                "All values in batch embedding {i} should be finite"
+            );
+        }
+
+        // Test semantic similarity - related texts should have higher similarity
+        let emb1 = &batch_result.embeddings[0]; // ML models
+        let emb2 = &batch_result.embeddings[1]; // Deep neural networks
+        let emb3 = &batch_result.embeddings[2]; // Transformers
+
+        // Calculate cosine similarities (embeddings are already normalized)
+        let sim_1_2: f32 = emb1
+            .iter()
+            .zip(emb2.iter())
+            .map(|(a, b)| a.to_f32() * b.to_f32())
+            .sum();
+        let sim_1_3: f32 = emb1
+            .iter()
+            .zip(emb3.iter())
+            .map(|(a, b)| a.to_f32() * b.to_f32())
+            .sum();
+        let sim_2_3: f32 = emb2
+            .iter()
+            .zip(emb3.iter())
+            .map(|(a, b)| a.to_f32() * b.to_f32())
+            .sum();
+
+        println!("🔍 Semantic similarities:");
+        println!("   ML ↔ Neural Networks: {sim_1_2:.3}");
+        println!("   ML ↔ Transformers: {sim_1_3:.3}");
+        println!("   Neural Networks ↔ Transformers: {sim_2_3:.3}");
+
+        // All similarities should be reasonably high (> 0.3) since texts are related
+        assert!(
+            sim_1_2 > 0.3,
+            "Related texts should have reasonable similarity: {sim_1_2}"
+        );
+        assert!(
+            sim_1_3 > 0.3,
+            "Related texts should have reasonable similarity: {sim_1_3}"
+        );
+        assert!(
+            sim_2_3 > 0.3,
+            "Related texts should have reasonable similarity: {sim_2_3}"
+        );
+
+        // Test caching - second provider with same config should reuse cached model
+        println!("💾 Testing model caching...");
+        let start_time = std::time::Instant::now();
+
+        let provider2 = FastEmbedProvider::create(config).await?;
+
+        let cache_time = start_time.elapsed();
+        println!(
+            "✅ Second provider created in {:.3}s (should be much faster)",
+            cache_time.as_secs_f64()
+        );
+
+        // Should still be only 1 cached model
+        assert_eq!(FastEmbedProvider::cache_size(), 1);
+
+        // Both providers should work identically
+        let embedding2 = provider2.embed_text(test_text).await?;
+        assert_eq!(embedding.len(), embedding2.len());
+
+        // Clean up cache
         FastEmbedProvider::clear_cache();
         assert_eq!(FastEmbedProvider::cache_size(), 0);
+
+        println!("🎉 ModernBERT integration test completed successfully!");
+        println!("📊 Model location: {}", expected_model_path.display());
+        println!(
+            "🔧 To run this test: cargo test test_modernbert_download_and_embedding -- --ignored"
+        );
+        println!(
+            "ℹ️  Note: This test uses the real cache directory for authentic integration testing"
+        );
 
         Ok(())
     }
@@ -555,17 +735,16 @@ mod tests {
     #[tokio::test]
     async fn test_user_defined_model_configuration() {
         // Test that ModernBERT config is set up correctly for user-defined model loading
-        let temp_dir = tempdir().unwrap();
-        let config = EmbedConfig::modernbert_large(temp_dir.path());
+        let config = EmbedConfig::modernbert_large();
 
         assert!(config.is_huggingface_model());
-        assert_eq!(config.model_name, "ModernBERT-large");
+        assert_eq!(config.model_name(), "ModernBERT-large");
         assert_eq!(config.hf_repo(), Some("answerdotai/ModernBERT-large"));
 
         // Check that paths are set up correctly
         let model_path = config.model_path();
         let onnx_path = config.onnx_model_path();
-        let tokenizer_path = &config.tokenizer_config.tokenizer_path;
+        let tokenizer_path = &config.tokenizer_config().tokenizer_path;
 
         assert!(model_path.to_string_lossy().contains("ModernBERT-large"));
         // ONNX path should contain either model_q4.onnx (if exists) or model_quantized.onnx (fallback)
@@ -579,10 +758,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_key_generation() {
-        let temp_dir = tempdir().unwrap();
-
         // Test that same config produces same cache key
-        let config1 = EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(16);
+        let config1 = EmbedConfig::default();
         let provider1 = FastEmbedProvider::new(config1.clone());
         let key1 = provider1.create_cache_key();
 
@@ -596,40 +773,36 @@ mod tests {
         );
 
         // Test that different configs produce different cache keys
-        let config_different_batch =
-            EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(32);
+        let config_different_batch = EmbedConfig::default();
         let provider3 = FastEmbedProvider::new(config_different_batch);
         let key3 = provider3.create_cache_key();
 
-        assert_ne!(
-            key1, key3,
-            "Different batch_size should produce different cache key"
-        );
+        // Since batch_size is now static, these configs are identical
+        assert_eq!(key1, key3, "Same configs should produce same cache key");
 
-        let config_different_normalize =
-            EmbedConfig::default_with_path(temp_dir.path()).with_normalize(false);
-        let provider4 = FastEmbedProvider::new(config_different_normalize);
+        // Test with different model name
+        let config_different_model = EmbedConfig::new("different-model");
+        let provider4 = FastEmbedProvider::new(config_different_model);
         let key4 = provider4.create_cache_key();
 
         assert_ne!(
             key1, key4,
-            "Different normalize setting should produce different cache key"
+            "Different model name should produce different cache key"
         );
 
-        // Test that different model paths produce different keys
-        let temp_dir2 = tempdir().unwrap();
-        let config_different_path = EmbedConfig::default_with_path(temp_dir2.path());
-        let provider5 = FastEmbedProvider::new(config_different_path);
+        // Since model_base_path is now inferred, test with different model configurations
+        // Test local vs HuggingFace variant with different model name
+        let config_local = EmbedConfig::new("some-local-model");
+        let provider5 = FastEmbedProvider::new(config_local);
         let key5 = provider5.create_cache_key();
 
         assert_ne!(
             key1, key5,
-            "Different model_base_path should produce different cache key"
+            "Different model configurations should produce different cache key"
         );
 
         // Test deterministic behavior - same config should always produce same key
-        let config_deterministic =
-            EmbedConfig::default_with_path(temp_dir.path()).with_batch_size(8);
+        let config_deterministic = EmbedConfig::default();
         let keys: Vec<String> = (0..5)
             .map(|_| {
                 let provider = FastEmbedProvider::new(config_deterministic.clone());

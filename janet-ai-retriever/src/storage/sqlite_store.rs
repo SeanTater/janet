@@ -343,6 +343,7 @@ mod tests {
             relative_path: "test.rs".to_string(),
             content: b"test content".to_vec(),
             hash: [1; 32],
+            modified_at: 0,
         };
         store.file_index.upsert_file(&file_ref).await?;
 

@@ -30,12 +30,13 @@ async fn main() -> Result<()> {
     println!("📝 Created test files with semantically different content\n");
 
     // Create embedding configuration with auto-download
-    let embedding_temp_dir = tempdir()?;
-    let embed_config = EmbedConfig::default_with_path(embedding_temp_dir.path())
-        .with_batch_size(4)
-        .with_normalize(true);
+    let _embedding_temp_dir = tempdir()?;
+    let embed_config = EmbedConfig::default();
 
-    println!("🤖 Setting up embedding model: {}", embed_config.model_name);
+    println!(
+        "🤖 Setting up embedding model: {}",
+        embed_config.model_name()
+    );
 
     // Set up the indexing engine WITH embeddings
     let indexing_config =

@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use half::f16;
-use janet_ai_embed::{EmbedConfig, TokenizerConfig};
+use janet_ai_embed::EmbedConfig;
 use janet_ai_retriever::{
     retrieval::{
         file_index::FileIndex,
@@ -11,7 +11,6 @@ use janet_ai_retriever::{
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process;
-use tempfile::tempdir;
 use tokio::time::Duration;
 
 /// A CLI tool to interact with the janet-ai-retriever chunk database.
@@ -176,16 +175,7 @@ async fn run() -> anyhow::Result<()> {
             println!("   Force reindex: {force}");
 
             // Set up embedding configuration
-            let embedding_temp_dir = tempdir()?;
-            let model_dir = embedding_temp_dir.path().join(&embedding_model);
-            let tokenizer_config = TokenizerConfig::standard(&model_dir);
-            let embed_config = EmbedConfig::new(
-                embedding_temp_dir.path(),
-                &embedding_model,
-                tokenizer_config,
-            )
-            .with_batch_size(8)
-            .with_normalize(true);
+            let embed_config = EmbedConfig::new(&embedding_model);
 
             // Set up the indexing engine configuration
             let indexing_config =
