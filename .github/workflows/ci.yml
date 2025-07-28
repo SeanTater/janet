@@ -26,6 +26,12 @@ jobs:
       with:
         components: rustfmt, clippy
 
+    - name: Install GTK dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgtk-4-dev
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -42,14 +48,29 @@ jobs:
       run: cargo fmt --all -- --check
       if: matrix.os == 'ubuntu-latest'
 
-    - name: Run clippy
+    - name: Run clippy (Linux)
+      if: matrix.os == 'ubuntu-latest'
       run: cargo clippy --all-targets --all-features -- -D warnings
 
-    - name: Build
+    - name: Run clippy (non-Linux)
+      if: matrix.os != 'ubuntu-latest'
+      run: cargo clippy --all-targets --all-features --exclude janet-ai-gtk -- -D warnings
+
+    - name: Build (Linux)
+      if: matrix.os == 'ubuntu-latest'
       run: cargo build --verbose --all-features
 
-    - name: Run tests
+    - name: Build (non-Linux)
+      if: matrix.os != 'ubuntu-latest'
+      run: cargo build --verbose --all-features --exclude janet-ai-gtk
+
+    - name: Run tests (Linux)
+      if: matrix.os == 'ubuntu-latest'
       run: cargo test --verbose --all-features
+
+    - name: Run tests (non-Linux)
+      if: matrix.os != 'ubuntu-latest'
+      run: cargo test --verbose --all-features --exclude janet-ai-gtk
 
     - name: Build documentation
       run: cargo doc --no-deps --all-features
@@ -101,6 +122,11 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@1.85.0
 
+    - name: Install GTK dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgtk-4-dev
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -118,6 +144,7 @@ jobs:
         # Check that each crate builds independently
         cargo check -p janet-ai-context --all-features
         cargo check -p janet-ai-retriever --all-features
+        cargo check -p janet-ai-gtk --all-features
 
         # Verify CLI tools work
         cargo build --bin janet-ai-context-cli
