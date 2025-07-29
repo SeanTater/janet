@@ -59,96 +59,105 @@ impl App {
     /// Parse IRC-style commands from user input
     fn parse_command(input: &str) -> (SearchType, String) {
         let input = input.trim();
-
-        if let Some(rest) = input.strip_prefix("/regex ") {
-            (SearchType::Regex, rest.to_string())
-        } else if let Some(rest) = input.strip_prefix("/semantic ") {
-            (SearchType::Semantic, rest.to_string())
-        } else {
-            // Default to semantic search for plain queries
-            (SearchType::Semantic, input.to_string())
+        match input {
+            s if s.starts_with("/regex ") => (SearchType::Regex, s[7..].to_string()),
+            s if s.starts_with("/semantic ") => (SearchType::Semantic, s[10..].to_string()),
+            _ => (SearchType::Semantic, input.to_string()),
         }
     }
 
-    /// Create a message bubble widget and add it to the container
-    fn add_message_to_ui(container: &gtk4::Box, message: &ChatMessage) {
+    /// Add message to UI and scroll to bottom
+    fn add_message_and_scroll(
+        container: &gtk4::Box,
+        scrolled: &gtk4::ScrolledWindow,
+        message: &ChatMessage,
+    ) {
         let message_widget = Self::create_message_bubble(message);
         container.append(&message_widget);
+        Self::scroll_to_bottom(scrolled);
     }
 
     /// Create a styled message bubble
     fn create_message_bubble(message: &ChatMessage) -> gtk4::Widget {
         let message_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-
-        if message.is_user {
-            // User message - aligned right
-            message_box.set_halign(gtk4::Align::End);
-
-            let bubble = gtk4::Frame::new(None);
-            bubble.set_css_classes(&["user-message"]);
-
-            let content_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
-            content_box.set_margin_all(12);
-
-            // Message content
-            let text_label = gtk4::Label::new(Some(&message.content));
-            text_label.set_wrap(true);
-            text_label.set_xalign(0.0);
-            text_label.set_selectable(true);
-
-            // Timestamp and search type
-            let meta_text = if let Some(ref search_type) = message.search_type {
-                format!(
-                    "{} • {}",
-                    message.timestamp,
-                    match search_type {
-                        SearchType::Regex => "regex",
-                        SearchType::Semantic => "semantic",
-                    }
-                )
-            } else {
-                message.timestamp.clone()
-            };
-
-            let meta_label = gtk4::Label::new(Some(&meta_text));
-            meta_label.set_css_classes(&["message-meta"]);
-            meta_label.set_xalign(1.0);
-
-            content_box.append(&text_label);
-            content_box.append(&meta_label);
-            bubble.set_child(Some(&content_box));
-
-            message_box.append(&bubble);
+        let (css_class, align, text_align, meta_align) = if message.is_user {
+            ("user-message", gtk4::Align::End, 0.0, 1.0)
         } else {
-            // System message - aligned left
-            message_box.set_halign(gtk4::Align::Start);
+            ("system-message", gtk4::Align::Start, 0.0, 0.0)
+        };
 
-            let bubble = gtk4::Frame::new(None);
-            bubble.set_css_classes(&["system-message"]);
+        message_box.set_halign(align);
 
-            let content_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
-            content_box.set_margin_all(12);
+        let bubble = gtk4::Frame::new(None);
+        bubble.set_css_classes(&[css_class]);
 
-            // Message content
-            let text_label = gtk4::Label::new(Some(&message.content));
-            text_label.set_wrap(true);
-            text_label.set_xalign(0.0);
-            text_label.set_selectable(true);
+        let content_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
+        content_box.set_margin_all(12);
+
+        let text_label = gtk4::Label::new(Some(&message.content));
+        text_label.set_wrap(true);
+        text_label.set_xalign(text_align);
+        text_label.set_selectable(true);
+        if !message.is_user {
             text_label.set_css_classes(&["monospace"]);
-
-            // Timestamp
-            let meta_label = gtk4::Label::new(Some(&message.timestamp));
-            meta_label.set_css_classes(&["message-meta"]);
-            meta_label.set_xalign(0.0);
-
-            content_box.append(&text_label);
-            content_box.append(&meta_label);
-            bubble.set_child(Some(&content_box));
-
-            message_box.append(&bubble);
         }
 
+        let meta_text = if message.is_user {
+            message
+                .search_type
+                .as_ref()
+                .map(|st| {
+                    format!(
+                        "{} • {}",
+                        message.timestamp,
+                        match st {
+                            SearchType::Regex => "regex",
+                            SearchType::Semantic => "semantic",
+                        }
+                    )
+                })
+                .unwrap_or_else(|| message.timestamp.clone())
+        } else {
+            message.timestamp.clone()
+        };
+
+        let meta_label = gtk4::Label::new(Some(&meta_text));
+        meta_label.set_css_classes(&["message-meta"]);
+        meta_label.set_xalign(meta_align);
+
+        content_box.append(&text_label);
+        content_box.append(&meta_label);
+        bubble.set_child(Some(&content_box));
+        message_box.append(&bubble);
+
         message_box.upcast()
+    }
+
+    /// Execute search request based on type
+    async fn execute_search(
+        config: &ServerConfig,
+        search_type: SearchType,
+        query: String,
+    ) -> Result<String, String> {
+        match search_type {
+            SearchType::Regex => {
+                let req = RegexSearchRequest {
+                    pattern: query,
+                    globs: None,
+                    include_deps: None,
+                    include_docs: None,
+                };
+                janet_ai_mcp::tools::regex_search::regex_search(config, req).await
+            }
+            SearchType::Semantic => {
+                let req = SemanticSearchRequest {
+                    query,
+                    limit: Some(20),
+                    threshold: None,
+                };
+                janet_ai_mcp::tools::semantic_search::semantic_search(config, req).await
+            }
+        }
     }
 
     /// Scroll the chat to the bottom
@@ -267,7 +276,8 @@ impl SimpleComponent for App {
         };
 
         // Add initial welcome message to UI
-        Self::add_message_to_ui(&model.messages_box, &model.messages[0]);
+        let message_widget = Self::create_message_bubble(&model.messages[0]);
+        model.messages_box.append(&message_widget);
 
         ComponentParts { model, widgets }
     }
@@ -276,62 +286,32 @@ impl SimpleComponent for App {
         match msg {
             AppMsg::SendMessage(input) => {
                 let (search_type, query) = Self::parse_command(&input);
-
-                // Add user message
                 let user_message = ChatMessage::new_user(input, search_type.clone());
                 self.messages.push(user_message.clone());
 
-                // Add message to UI
-                Self::add_message_to_ui(&self.messages_box, &user_message);
+                Self::add_message_and_scroll(
+                    &self.messages_box,
+                    &self.chat_scrolled,
+                    &user_message,
+                );
 
-                // Scroll to bottom
-                Self::scroll_to_bottom(&self.chat_scrolled);
-
-                // Execute search
-                let sender_clone = sender.clone();
                 let config = self.server_config.clone();
-
                 relm4::spawn(async move {
-                    let result = match search_type {
-                        SearchType::Regex => {
-                            let req = RegexSearchRequest {
-                                pattern: query,
-                                globs: None,
-                                include_deps: None,
-                                include_docs: None,
-                            };
-                            janet_ai_mcp::tools::regex_search::regex_search(&config, req).await
-                        }
-                        SearchType::Semantic => {
-                            let req = SemanticSearchRequest {
-                                query,
-                                limit: Some(20),
-                                threshold: None,
-                            };
-                            janet_ai_mcp::tools::semantic_search::semantic_search(&config, req)
-                                .await
-                        }
-                    };
-
-                    let display_result = match result {
-                        Ok(output) => output,
-                        Err(error) => format!("❌ Error: {error}"),
-                    };
-
-                    sender_clone.input(AppMsg::ShowResult(display_result));
+                    let result = Self::execute_search(&config, search_type, query).await;
+                    let display_result =
+                        result.unwrap_or_else(|error| format!("❌ Error: {error}"));
+                    sender.input(AppMsg::ShowResult(display_result));
                 });
             }
 
             AppMsg::ShowResult(result) => {
-                // Add system response message
                 let response_message = ChatMessage::new_system(result);
                 self.messages.push(response_message.clone());
-
-                // Add message to UI
-                Self::add_message_to_ui(&self.messages_box, &response_message);
-
-                // Scroll to bottom
-                Self::scroll_to_bottom(&self.chat_scrolled);
+                Self::add_message_and_scroll(
+                    &self.messages_box,
+                    &self.chat_scrolled,
+                    &response_message,
+                );
             }
 
             AppMsg::ClearEntry => {
