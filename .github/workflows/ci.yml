@@ -54,7 +54,7 @@ jobs:
 
     - name: Run clippy (non-Linux)
       if: matrix.os != 'ubuntu-latest'
-      run: cargo clippy --all-targets --all-features --exclude janet-ai-gtk -- -D warnings
+      run: cargo clippy --workspace --exclude janet-ai-gtk --all-targets --all-features -- -D warnings
 
     - name: Build (Linux)
       if: matrix.os == 'ubuntu-latest'
@@ -62,7 +62,7 @@ jobs:
 
     - name: Build (non-Linux)
       if: matrix.os != 'ubuntu-latest'
-      run: cargo build --verbose --all-features --exclude janet-ai-gtk
+      run: cargo build --workspace --exclude janet-ai-gtk --verbose --all-features
 
     - name: Run tests (Linux)
       if: matrix.os == 'ubuntu-latest'
@@ -70,7 +70,7 @@ jobs:
 
     - name: Run tests (non-Linux)
       if: matrix.os != 'ubuntu-latest'
-      run: cargo test --verbose --all-features --exclude janet-ai-gtk
+      run: cargo test --workspace --exclude janet-ai-gtk --verbose --all-features
 
     - name: Build documentation
       run: cargo doc --no-deps --all-features
