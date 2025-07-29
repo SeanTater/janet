@@ -55,13 +55,9 @@
 }
 
 /* Input controls base styles */
-entry, button {
+entry {
     border-radius: 20px;
     transition: all 0.3s ease;
-}
-
-/* Chat input styling */
-entry {
     padding: 12px 16px;
     border: 2px solid #e0e0e0;
 }
@@ -71,22 +67,24 @@ entry:focus {
     box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
 }
 
-/* Send button styling */
-button {
+/* Send button styling - specific to chat send button */
+.send-button {
+    border-radius: 20px;
     padding: 12px 20px;
     background: linear-gradient(135deg, #007acc, #0056a6);
     color: white;
     border: none;
     font-weight: 600;
+    transition: all 0.3s ease;
 }
 
-button:hover {
+.send-button:hover {
     background: linear-gradient(135deg, #0056a6, #003d7a);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
 }
 
-button:active {
+.send-button:active {
     transform: translateY(0);
     box-shadow: 0 2px 6px rgba(0, 122, 204, 0.3);
 }

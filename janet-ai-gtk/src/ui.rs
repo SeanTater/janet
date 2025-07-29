@@ -223,7 +223,7 @@ impl SimpleComponent for App {
                     },
 
                     gtk4::Label {
-                        set_markup: "<span size='small' alpha='0.7'>Tip: Index your repository first with:\ncargo run -p janet-ai-retriever -- index --repo /path/to/repo</span>",
+                        set_markup: "<span size='small' color='#666'>Tip: Index your repository first with:\ncargo run -p janet-ai-retriever -- index --repo /path/to/repo</span>",
                         set_margin_top: 20,
                         set_justify: gtk4::Justification::Center,
                     },
@@ -273,6 +273,7 @@ impl SimpleComponent for App {
 
                         gtk4::Button {
                             set_label: "Send",
+                            add_css_class: "send-button",
                             connect_clicked[sender, message_entry] => move |_| {
                                 let text = message_entry.text().to_string();
                                 if !text.trim().is_empty() {
