@@ -2065,6 +2065,7 @@ name = "janet-ai-gtk"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "clap",
  "gtk4",
  "janet-ai-mcp",
  "relm4",

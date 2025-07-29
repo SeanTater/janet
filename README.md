@@ -4,11 +4,13 @@ A high-performance code retrieval and analysis system built in Rust, designed fo
 
 ## Overview
 
-Janet is a Rust workspace containing three complementary crates for AI-powered code analysis and retrieval:
+Janet is a Rust workspace containing four complementary crates for AI-powered code analysis and retrieval:
 
-- **janet-ai-context**: A library for chunking code/text into structured passages optimized for retrieval models (RAG systems)
-- **janet-ai-embed**: A comprehensive embedding library with FastEmbed integration and multiple model support
-- **janet-ai-retriever**: A complete indexing system with file monitoring, text search, and vector similarity search
+- **[janet-ai-context](./janet-ai-context/README.md)**: A library for chunking code/text into structured passages optimized for retrieval models (RAG systems)
+- **[janet-ai-embed](./janet-ai-embed/README.md)**: A comprehensive embedding library with FastEmbed integration and multiple model support
+- **[janet-ai-retriever](./janet-ai-retriever/README.md)**: A complete indexing system with file monitoring, text search, and vector similarity search
+- **[janet-ai-mcp](./janet-ai-mcp/README.md)**: MCP (Model Context Protocol) server for AI integration and semantic search tools
+- **[janet-ai-gtk](./janet-ai-gtk/README.md)**: Modern GTK4 desktop application with chat interface for semantic code search
 
 ## Features
 
@@ -36,6 +38,21 @@ Janet is a Rust workspace containing three complementary crates for AI-powered c
 - ⚡ **Async Architecture**: Full async support for non-blocking operations
 - 🖥️ **Complete CLI**: Manage databases with search, statistics, and data inspection
 - 📊 **Rich Examples**: Comprehensive examples showing end-to-end workflows
+
+### janet-ai-mcp
+- 🔌 **MCP Server**: Full Model Context Protocol implementation for AI integration
+- 🔍 **Search Tools**: Regex and semantic search capabilities for AI assistants
+- 📊 **Status Reporting**: Comprehensive system health and configuration monitoring
+- ⚡ **Async Processing**: Non-blocking search operations with proper error handling
+- 🛠️ **Development Tools**: CLI tools for testing and debugging MCP functionality
+
+### janet-ai-gtk
+- 🖥️ **Modern Desktop UI**: Clean GTK4 interface with contemporary design
+- 💬 **Chat Interface**: Intuitive conversational interface for code exploration
+- 🎯 **Dual Search Modes**: Both semantic and regex search with IRC-style commands
+- 📁 **Repository Selection**: Easy folder selection or command-line specification
+- ⚡ **Real-time Results**: Fast search with immediate response display
+- 🎨 **Syntax Highlighting**: Formatted code display with monospace styling
 
 ## Getting Started
 
@@ -143,6 +160,33 @@ cargo run -p janet-ai-retriever -- stats
 cargo run -p janet-ai-retriever -- --help
 ```
 
+### GTK Desktop Application
+
+For a user-friendly graphical interface:
+
+```bash
+# Install required system dependencies (Ubuntu/Debian)
+sudo apt install libgtk-4-dev
+
+# Build and run the GTK app
+cargo run -p janet-ai-gtk
+
+# Or with a specific repository
+cargo run -p janet-ai-gtk -- /path/to/your/repo
+```
+
+### MCP Server
+
+Run the MCP server for AI integration:
+
+```bash
+# Start MCP server for current directory
+cargo run -p janet-ai-mcp -- --root .
+
+# Test MCP server functionality
+cargo run -p janet-ai-mcp --example working_demo
+```
+
 ### Examples
 
 Run comprehensive examples showing full workflows:
@@ -230,6 +274,18 @@ janet/
 │   │   └── main.rs        # CLI application
 │   ├── examples/          # End-to-end workflow examples
 │   ├── migrations/        # Database schema
+│   └── README.md
+├── janet-ai-mcp/           # MCP server for AI integration
+│   ├── src/
+│   │   ├── tools/         # Search tool implementations
+│   │   ├── server.rs      # MCP protocol handling
+│   │   └── main.rs        # Server application
+│   └── README.md
+├── janet-ai-gtk/           # GTK4 desktop application
+│   ├── src/
+│   │   ├── ui.rs          # Main UI components
+│   │   ├── style.css      # GTK styling
+│   │   └── main.rs        # Application entry point
 │   └── README.md
 ├── CLAUDE.md              # Development guidance
 └── ARCHITECTURE_REFERENCE.md  # Detailed architecture notes

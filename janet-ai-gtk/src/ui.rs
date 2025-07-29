@@ -45,14 +45,18 @@ pub enum AppMsg {
     SendMessage(String),
     ShowResult(String),
     ClearEntry,
+    SelectFolder,
+    FolderSelected(PathBuf),
 }
 
 pub struct App {
-    server_config: ServerConfig,
+    server_config: Option<ServerConfig>,
+    current_repo: Option<PathBuf>,
     messages: Vec<ChatMessage>,
     messages_box: gtk4::Box,
     chat_scrolled: gtk4::ScrolledWindow,
     message_entry: gtk4::Entry,
+    chat_interface_box: gtk4::Box,
 }
 
 impl App {
@@ -175,7 +179,7 @@ impl App {
 
 #[relm4::component(pub)]
 impl SimpleComponent for App {
-    type Init = ();
+    type Init = Option<PathBuf>;
     type Input = AppMsg;
     type Output = ();
 
@@ -189,54 +193,93 @@ impl SimpleComponent for App {
                 set_title_widget = &gtk4::Label::new(Some("Janet AI Chat")),
             },
 
-            gtk4::Box {
-                set_orientation: gtk4::Orientation::Vertical,
-                set_spacing: 0,
-
-                // Chat messages area
-                #[name = "chat_scrolled"]
-                gtk4::ScrolledWindow {
-                    set_vexpand: true,
-                    set_hscrollbar_policy: gtk4::PolicyType::Never,
-                    set_vscrollbar_policy: gtk4::PolicyType::Automatic,
-                    set_margin_all: 8,
-
-                    #[name = "messages_box"]
-                    gtk4::Box {
-                        set_orientation: gtk4::Orientation::Vertical,
-                        set_spacing: 8,
-                        set_margin_all: 8,
-                        set_valign: gtk4::Align::End,
-                    },
-                },
-
-                // Input area at bottom
+            gtk4::Stack {
+                // Folder selection screen
+                #[name = "folder_selection_box"]
                 gtk4::Box {
-                    set_orientation: gtk4::Orientation::Horizontal,
-                    set_spacing: 8,
-                    set_margin_all: 8,
+                    set_orientation: gtk4::Orientation::Vertical,
+                    set_spacing: 20,
+                    set_margin_all: 40,
+                    set_halign: gtk4::Align::Center,
+                    set_valign: gtk4::Align::Center,
 
-                    #[name = "message_entry"]
-                    gtk4::Entry {
-                        set_hexpand: true,
-                        set_placeholder_text: Some("Type '/regex pattern' or '/semantic query' or just 'query' for semantic search..."),
-                        connect_activate[sender] => move |entry| {
-                            let text = entry.text().to_string();
-                            if !text.trim().is_empty() {
-                                sender.input(AppMsg::SendMessage(text));
-                                sender.input(AppMsg::ClearEntry);
-                            }
-                        },
+                    gtk4::Label {
+                        set_markup: "<span size='24000' weight='bold'>Welcome to Janet AI</span>",
+                        set_margin_bottom: 10,
+                    },
+
+                    gtk4::Label {
+                        set_text: "Select a repository to start searching your code with semantic AI.",
+                        set_margin_bottom: 20,
                     },
 
                     gtk4::Button {
-                        set_label: "Send",
-                        connect_clicked[sender, message_entry] => move |_| {
-                            let text = message_entry.text().to_string();
-                            if !text.trim().is_empty() {
-                                sender.input(AppMsg::SendMessage(text));
-                                sender.input(AppMsg::ClearEntry);
-                            }
+                        set_label: "📁 Select Repository Folder",
+                        set_size_request: (300, 50),
+                        add_css_class: "suggested-action",
+                        connect_clicked[sender] => move |_| {
+                            sender.input(AppMsg::SelectFolder);
+                        },
+                    },
+
+                    gtk4::Label {
+                        set_markup: "<span size='small' alpha='0.7'>Tip: Index your repository first with:\ncargo run -p janet-ai-retriever -- index --repo /path/to/repo</span>",
+                        set_margin_top: 20,
+                        set_justify: gtk4::Justification::Center,
+                    },
+                },
+
+                // Chat interface
+                #[name = "chat_interface_box"]
+                gtk4::Box {
+                    set_orientation: gtk4::Orientation::Vertical,
+                    set_spacing: 0,
+
+                    // Chat messages area
+                    #[name = "chat_scrolled"]
+                    gtk4::ScrolledWindow {
+                        set_vexpand: true,
+                        set_hscrollbar_policy: gtk4::PolicyType::Never,
+                        set_vscrollbar_policy: gtk4::PolicyType::Automatic,
+                        set_margin_all: 8,
+
+                        #[name = "messages_box"]
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Vertical,
+                            set_spacing: 8,
+                            set_margin_all: 8,
+                            set_valign: gtk4::Align::End,
+                        },
+                    },
+
+                    // Input area at bottom
+                    gtk4::Box {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_spacing: 8,
+                        set_margin_all: 8,
+
+                        #[name = "message_entry"]
+                        gtk4::Entry {
+                            set_hexpand: true,
+                            set_placeholder_text: Some("Type '/regex pattern' or '/semantic query' or just 'query' for semantic search..."),
+                            connect_activate[sender] => move |entry| {
+                                let text = entry.text().to_string();
+                                if !text.trim().is_empty() {
+                                    sender.input(AppMsg::SendMessage(text));
+                                    sender.input(AppMsg::ClearEntry);
+                                }
+                            },
+                        },
+
+                        gtk4::Button {
+                            set_label: "Send",
+                            connect_clicked[sender, message_entry] => move |_| {
+                                let text = message_entry.text().to_string();
+                                if !text.trim().is_empty() {
+                                    sender.input(AppMsg::SendMessage(text));
+                                    sender.input(AppMsg::ClearEntry);
+                                }
+                            },
                         },
                     },
                 },
@@ -245,14 +288,10 @@ impl SimpleComponent for App {
     }
 
     fn init(
-        _init: Self::Init,
+        repo_path: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let messages = vec![ChatMessage::new_system(
-            "Welcome to Janet AI Chat! 🤖\n\nUse commands like:\n• /regex pattern - Search with regex\n• /semantic query - Semantic search\n• query - Default semantic search\n\nMake sure you've indexed your codebase first:\ncargo run -p janet-ai-retriever -- index --repo .".to_string()
-        )];
-
         let widgets = view_output!();
 
         // Load CSS for styling
@@ -265,19 +304,41 @@ impl SimpleComponent for App {
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
+        let (server_config, current_repo, messages, show_chat) = if let Some(repo) = repo_path {
+            // Repository provided via command line
+            let config = ServerConfig::new(repo.clone());
+            let messages = vec![ChatMessage::new_system(format!(
+                "Welcome to Janet AI Chat! 🤖\n\nRepository: {}\n\nUse commands like:\n• /regex pattern - Search with regex\n• /semantic query - Semantic search\n• query - Default semantic search\n\nMake sure you've indexed your codebase first:\ncargo run -p janet-ai-retriever -- index --repo .",
+                repo.display()
+            ))];
+            (Some(config), Some(repo), messages, true)
+        } else {
+            // No repository provided, show folder selection
+            (None, None, Vec::new(), false)
+        };
+
         let model = App {
-            server_config: ServerConfig::new(
-                std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            ),
+            server_config,
+            current_repo,
             messages,
             messages_box: widgets.messages_box.clone(),
             chat_scrolled: widgets.chat_scrolled.clone(),
             message_entry: widgets.message_entry.clone(),
+            chat_interface_box: widgets.chat_interface_box.clone(),
         };
 
-        // Add initial welcome message to UI
-        let message_widget = Self::create_message_bubble(&model.messages[0]);
-        model.messages_box.append(&message_widget);
+        // Show appropriate interface - get the Stack from the main window
+        let stack = root.child().unwrap().downcast::<gtk4::Stack>().unwrap();
+        if show_chat {
+            stack.set_visible_child(&widgets.chat_interface_box);
+            // Add initial welcome message to UI
+            if !model.messages.is_empty() {
+                let message_widget = Self::create_message_bubble(&model.messages[0]);
+                model.messages_box.append(&message_widget);
+            }
+        } else {
+            stack.set_visible_child(&widgets.folder_selection_box);
+        }
 
         ComponentParts { model, widgets }
     }
@@ -285,23 +346,25 @@ impl SimpleComponent for App {
     fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>) {
         match msg {
             AppMsg::SendMessage(input) => {
-                let (search_type, query) = Self::parse_command(&input);
-                let user_message = ChatMessage::new_user(input, search_type.clone());
-                self.messages.push(user_message.clone());
+                if let Some(config) = &self.server_config {
+                    let (search_type, query) = Self::parse_command(&input);
+                    let user_message = ChatMessage::new_user(input, search_type.clone());
+                    self.messages.push(user_message.clone());
 
-                Self::add_message_and_scroll(
-                    &self.messages_box,
-                    &self.chat_scrolled,
-                    &user_message,
-                );
+                    Self::add_message_and_scroll(
+                        &self.messages_box,
+                        &self.chat_scrolled,
+                        &user_message,
+                    );
 
-                let config = self.server_config.clone();
-                relm4::spawn(async move {
-                    let result = Self::execute_search(&config, search_type, query).await;
-                    let display_result =
-                        result.unwrap_or_else(|error| format!("❌ Error: {error}"));
-                    sender.input(AppMsg::ShowResult(display_result));
-                });
+                    let config = config.clone();
+                    relm4::spawn(async move {
+                        let result = Self::execute_search(&config, search_type, query).await;
+                        let display_result =
+                            result.unwrap_or_else(|error| format!("❌ Error: {error}"));
+                        sender.input(AppMsg::ShowResult(display_result));
+                    });
+                }
             }
 
             AppMsg::ShowResult(result) => {
@@ -316,6 +379,66 @@ impl SimpleComponent for App {
 
             AppMsg::ClearEntry => {
                 self.message_entry.set_text("");
+            }
+
+            AppMsg::SelectFolder => {
+                let dialog = gtk4::FileChooserDialog::new(
+                    Some("Select Repository Folder"),
+                    None::<&gtk4::Window>,
+                    gtk4::FileChooserAction::SelectFolder,
+                    &[
+                        ("Cancel", gtk4::ResponseType::Cancel),
+                        ("Select", gtk4::ResponseType::Accept),
+                    ],
+                );
+
+                let sender_clone = sender.clone();
+                dialog.connect_response(move |dialog, response| {
+                    if response == gtk4::ResponseType::Accept {
+                        if let Some(file) = dialog.file() {
+                            if let Some(path) = file.path() {
+                                sender_clone.input(AppMsg::FolderSelected(path));
+                            }
+                        }
+                    }
+                    dialog.close();
+                });
+
+                dialog.show();
+            }
+
+            AppMsg::FolderSelected(repo_path) => {
+                // Set up the repository
+                self.server_config = Some(ServerConfig::new(repo_path.clone()));
+                self.current_repo = Some(repo_path.clone());
+
+                // Initialize with welcome message
+                let welcome_message = ChatMessage::new_system(format!(
+                    "Welcome to Janet AI Chat! 🤖\n\nRepository: {}\n\nUse commands like:\n• /regex pattern - Search with regex\n• /semantic query - Semantic search\n• query - Default semantic search\n\nMake sure you've indexed your codebase first:\ncargo run -p janet-ai-retriever -- index --repo .",
+                    repo_path.display()
+                ));
+                self.messages = vec![welcome_message.clone()];
+
+                // Switch to chat interface - get the Stack from the main window
+                let main_window = self
+                    .chat_interface_box
+                    .root()
+                    .unwrap()
+                    .downcast::<gtk4::ApplicationWindow>()
+                    .unwrap();
+                let stack = main_window
+                    .child()
+                    .unwrap()
+                    .downcast::<gtk4::Stack>()
+                    .unwrap();
+                stack.set_visible_child(&self.chat_interface_box);
+
+                // Clear existing messages and add welcome message
+                while let Some(child) = self.messages_box.first_child() {
+                    self.messages_box.remove(&child);
+                }
+                let message_widget = Self::create_message_bubble(&welcome_message);
+                self.messages_box.append(&message_widget);
             }
         }
     }
