@@ -9,6 +9,7 @@ name = "janet-ai-gtk"
 path = "src/main.rs"
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
 gtk4 = "0.9"
 janet-ai-mcp = { path = "../janet-ai-mcp" }
 relm4 = "0.9"
