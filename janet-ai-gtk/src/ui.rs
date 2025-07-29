@@ -1,21 +1,32 @@
-use crate::conversation::{Conversation, ToolRequest, ToolType};
 use gtk4::prelude::*;
-use janet_ai_mcp::tools::regex_search::RegexSearchRequest;
+use janet_ai_mcp::{
+    ServerConfig,
+    tools::{regex_search::RegexSearchRequest, semantic_search::SemanticSearchRequest},
+};
 use relm4::prelude::*;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone)]
+pub enum SearchType {
+    Regex,
+    Semantic,
+}
+
 #[derive(Debug)]
 pub enum AppMsg {
-    ExecuteRegexSearch(String),
+    ExecuteSearch(String),
     ShowResult(String),
+    SetSearchType(SearchType),
 }
 
 pub struct App {
-    conversation: Conversation,
+    server_config: ServerConfig,
     result_text: String,
+    search_type: SearchType,
+    text_buffer: gtk4::TextBuffer,
 }
 
-#[relm4::component]
+#[relm4::component(pub)]
 impl SimpleComponent for App {
     type Init = ();
     type Input = AppMsg;
@@ -23,46 +34,87 @@ impl SimpleComponent for App {
 
     view! {
         main_window = gtk4::ApplicationWindow {
-            set_title: Some("Janet AI Search - MVP"),
-            set_default_size: (800, 600),
+            set_default_size: (900, 700),
+
+            #[wrap(Some)]
+            set_titlebar = &gtk4::HeaderBar {
+                #[wrap(Some)]
+                set_title_widget = &gtk4::Label::new(Some("Janet AI Search")),
+            },
 
             gtk4::Box {
                 set_orientation: gtk4::Orientation::Vertical,
                 set_spacing: 12,
                 set_margin_all: 16,
 
-                gtk4::HeaderBar {
-                    #[wrap(Some)]
-                    set_title_widget = &gtk4::Label::new(Some("Janet AI Search")),
+                // Search type selection
+                gtk4::Box {
+                    set_orientation: gtk4::Orientation::Horizontal,
+                    set_spacing: 12,
+
+                    gtk4::Label {
+                        set_text: "Search Type:",
+                    },
+
+                    #[name = "regex_radio"]
+                    gtk4::CheckButton {
+                        set_label: Some("Regex"),
+                        set_active: true,
+                        connect_toggled[sender] => move |btn| {
+                            if btn.is_active() {
+                                sender.input(AppMsg::SetSearchType(SearchType::Regex));
+                            }
+                        },
+                    },
+
+                    #[name = "semantic_radio"]
+                    gtk4::CheckButton {
+                        set_label: Some("Semantic"),
+                        set_group: Some(&regex_radio),
+                        connect_toggled[sender] => move |btn| {
+                            if btn.is_active() {
+                                sender.input(AppMsg::SetSearchType(SearchType::Semantic));
+                            }
+                        },
+                    },
                 },
 
-                // Simple regex search for MVP
+                // Search input area
                 gtk4::Box {
                     set_orientation: gtk4::Orientation::Horizontal,
                     set_spacing: 8,
 
+                    #[name = "search_label"]
                     gtk4::Label {
-                        set_text: "Regex Pattern:",
+                        #[watch]
+                        set_text: match model.search_type {
+                            SearchType::Regex => "Regex Pattern:",
+                            SearchType::Semantic => "Semantic Query:",
+                        },
                     },
 
-                    #[name = "pattern_entry"]
+                    #[name = "search_entry"]
                     gtk4::Entry {
                         set_hexpand: true,
-                        set_placeholder_text: Some("Enter regex pattern..."),
+                        #[watch]
+                        set_placeholder_text: match model.search_type {
+                            SearchType::Regex => Some("Enter regex pattern..."),
+                            SearchType::Semantic => Some("Enter semantic search query..."),
+                        },
                         connect_activate[sender] => move |entry| {
                             let pattern = entry.text().to_string();
                             if !pattern.trim().is_empty() {
-                                sender.input(AppMsg::ExecuteRegexSearch(pattern));
+                                sender.input(AppMsg::ExecuteSearch(pattern));
                             }
                         },
                     },
 
                     gtk4::Button {
                         set_label: "Search",
-                        connect_clicked[sender, pattern_entry] => move |_| {
-                            let pattern = pattern_entry.text().to_string();
+                        connect_clicked[sender, search_entry] => move |_| {
+                            let pattern = search_entry.text().to_string();
                             if !pattern.trim().is_empty() {
-                                sender.input(AppMsg::ExecuteRegexSearch(pattern));
+                                sender.input(AppMsg::ExecuteSearch(pattern));
                             }
                         },
                     },
@@ -81,6 +133,7 @@ impl SimpleComponent for App {
                         set_editable: false,
                         set_wrap_mode: gtk4::WrapMode::Word,
                         set_monospace: true,
+                        set_buffer: Some(&model.text_buffer),
                     },
                 },
             },
@@ -92,57 +145,77 @@ impl SimpleComponent for App {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let text_buffer = gtk4::TextBuffer::new(None);
+        let initial_text = "Select a search type and enter a pattern to search the codebase.\n\n• Regex: Search using regular expressions\n• Semantic: Search using AI-powered semantic similarity\n\nMake sure you have indexed your codebase first with:\ncargo run -p janet-ai-retriever -- index --repo .";
+        text_buffer.set_text(initial_text);
+
         let model = App {
-            conversation: Conversation::new(std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))),
-            result_text: "Enter a regex pattern above to search the codebase.\n\nMake sure you have indexed your codebase first with:\ncargo run -p janet-ai-retriever -- index --repo .".to_string(),
+            server_config: ServerConfig::new(
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            ),
+            result_text: initial_text.to_string(),
+            search_type: SearchType::Regex,
+            text_buffer,
         };
 
         let widgets = view_output!();
-
-        // Set initial text
-        widgets.results_view.buffer().set_text(&model.result_text);
 
         ComponentParts { model, widgets }
     }
 
     fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>) {
         match msg {
-            AppMsg::ExecuteRegexSearch(pattern) => {
+            AppMsg::ExecuteSearch(pattern) => {
+                let search_desc = match self.search_type {
+                    SearchType::Regex => "regex pattern",
+                    SearchType::Semantic => "semantic query",
+                };
                 self.result_text =
-                    format!("🔍 Searching for pattern: {}\n⏳ Please wait...", pattern);
-
-                let request = ToolRequest::RegexSearch(RegexSearchRequest {
-                    pattern: pattern.clone(),
-                    globs: None,
-                    include_deps: None,
-                    include_docs: None,
-                });
-
-                let _call_id = self
-                    .conversation
-                    .add_call(ToolType::RegexSearch, request.clone());
+                    format!("🔍 Searching for {search_desc}: {pattern}\n⏳ Please wait...");
+                self.text_buffer.set_text(&self.result_text);
 
                 let sender_clone = sender.clone();
-                let config = self.conversation.server_config.clone();
-                tokio::spawn(async move {
-                    let result = match request {
-                        ToolRequest::RegexSearch(req) => {
+                let config = self.server_config.clone();
+                let search_type = self.search_type.clone();
+
+                relm4::spawn(async move {
+                    let result = match search_type {
+                        SearchType::Regex => {
+                            let req = RegexSearchRequest {
+                                pattern,
+                                globs: None,
+                                include_deps: None,
+                                include_docs: None,
+                            };
                             janet_ai_mcp::tools::regex_search::regex_search(&config, req).await
                         }
-                        _ => unreachable!(),
+                        SearchType::Semantic => {
+                            let req = SemanticSearchRequest {
+                                query: pattern,
+                                limit: Some(20),
+                                threshold: None,
+                            };
+                            janet_ai_mcp::tools::semantic_search::semantic_search(&config, req)
+                                .await
+                        }
                     };
 
                     let display_result = match result {
                         Ok(output) => output,
-                        Err(error) => format!("❌ Error: {}", error),
+                        Err(error) => format!("❌ Error: {error}"),
                     };
 
                     sender_clone.input(AppMsg::ShowResult(display_result));
                 });
             }
 
+            AppMsg::SetSearchType(search_type) => {
+                self.search_type = search_type;
+            }
+
             AppMsg::ShowResult(result) => {
                 self.result_text = result;
+                self.text_buffer.set_text(&self.result_text);
             }
         }
     }
