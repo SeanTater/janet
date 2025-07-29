@@ -5,4 +5,5 @@ members = [
     "janet-ai-context",
     "janet-ai-embed",
     "janet-ai-mcp",
+    "janet-ai-gtk",
 ]

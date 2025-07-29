@@ -4,11 +4,11 @@ use janet_ai_embed::{EmbedConfig, EmbeddingProvider, FastEmbedProvider};
 use janet_ai_retriever::retrieval::indexing_engine::{IndexingEngine, IndexingEngineConfig};
 use janet_ai_retriever::storage::{ChunkStore, EmbeddingStore, sqlite_store::SqliteStore};
 use rmcp::schemars;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 #[allow(dead_code)] // Used by rmcp macro system
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SemanticSearchRequest {
     #[schemars(description = "Query text for semantic search")]
     pub query: String,
