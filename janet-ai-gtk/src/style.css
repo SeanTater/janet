@@ -1,0 +1,107 @@
+/* Chat interface styling */
+
+.user-message {
+    background: linear-gradient(135deg, #007acc, #0056a6);
+    color: white;
+    border-radius: 18px;
+    border: none;
+    margin: 4px 20px 4px 80px;
+    box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+}
+
+.system-message {
+    background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
+    color: #333;
+    border-radius: 18px;
+    border: none;
+    margin: 4px 80px 4px 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.message-meta {
+    font-size: 0.8em;
+    opacity: 0.7;
+    font-weight: 500;
+}
+
+.monospace {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+/* Make user messages more prominent */
+.user-message label {
+    color: white;
+    font-weight: 500;
+}
+
+.user-message .message-meta {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* System messages styling */
+.system-message label {
+    color: #333;
+}
+
+.system-message .message-meta {
+    color: rgba(51, 51, 51, 0.6);
+}
+
+/* Chat input styling */
+entry {
+    border-radius: 20px;
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    transition: border-color 0.3s ease;
+}
+
+entry:focus {
+    border-color: #007acc;
+    box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+}
+
+/* Send button styling */
+button {
+    border-radius: 20px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #007acc, #0056a6);
+    color: white;
+    border: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    background: linear-gradient(135deg, #0056a6, #003d7a);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+}
+
+button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 122, 204, 0.3);
+}
+
+/* Smooth scrolling */
+scrolledwindow {
+    border: none;
+}
+
+/* Window styling */
+window {
+    background: #fafafa;
+}
+
+headerbar {
+    background: linear-gradient(135deg, #007acc, #0056a6);
+    color: white;
+    border-radius: 0;
+}
+
+headerbar label {
+    color: white;
+    font-weight: 600;
+    font-size: 1.1em;
+}
