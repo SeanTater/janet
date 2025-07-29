@@ -110,6 +110,56 @@ impl std::fmt::Debug for FastEmbedProvider {
 }
 
 impl FastEmbedProvider {
+    /// Create a minimal tokenizer_config.json with tokens extracted from special_tokens_map.json
+    fn create_minimal_tokenizer_config(&self, special_tokens_map: &[u8]) -> Result<Vec<u8>> {
+        // Parse the special tokens map to extract token values
+        let special_tokens: serde_json::Value = serde_json::from_slice(special_tokens_map)
+            .map_err(|e| EmbedError::External { source: e.into() })?;
+
+        // Extract token content from the special tokens map
+        let get_token_content = |token_name: &str| -> Option<String> {
+            special_tokens
+                .get(token_name)?
+                .get("content")?
+                .as_str()
+                .map(|s| s.to_string())
+        };
+
+        // Create minimal config with tokens from special_tokens_map
+        let mut minimal_config = serde_json::json!({
+            "clean_up_tokenization_spaces": true,
+            "do_lower_case": false,
+            "model_max_length": 8192,
+            "strip_accents": null,
+            "tokenize_chinese_chars": true,
+            "tokenizer_class": "ModernBertTokenizer"
+        });
+
+        // Add special tokens if they exist
+        if let Some(cls_token) = get_token_content("cls_token") {
+            minimal_config["cls_token"] = serde_json::Value::String(cls_token);
+        }
+        if let Some(sep_token) = get_token_content("sep_token") {
+            minimal_config["sep_token"] = serde_json::Value::String(sep_token);
+        }
+        if let Some(pad_token) = get_token_content("pad_token") {
+            minimal_config["pad_token"] = serde_json::Value::String(pad_token);
+        }
+        if let Some(mask_token) = get_token_content("mask_token") {
+            minimal_config["mask_token"] = serde_json::Value::String(mask_token);
+        }
+        if let Some(unk_token) = get_token_content("unk_token") {
+            minimal_config["unk_token"] = serde_json::Value::String(unk_token);
+        }
+
+        tracing::info!(
+            "Generated minimal tokenizer_config.json for {}",
+            self.config.model_name()
+        );
+
+        serde_json::to_vec_pretty(&minimal_config)
+            .map_err(|e| EmbedError::External { source: e.into() })
+    }
     /// Creates a new uninitialized provider. See module docs for usage patterns and initialization.
     pub fn new(config: EmbedConfig) -> Self {
         Self {
@@ -271,26 +321,12 @@ impl FastEmbedProvider {
                     .await
                     .map_err(|e| EmbedError::Io { source: e })?
             } else {
-                // Create a minimal tokenizer config
-                let minimal_config = serde_json::json!({
-                    "clean_up_tokenization_spaces": true,
-                    "do_lower_case": false,
-                    "model_max_length": 512,
-                    "tokenizer_class": "BertTokenizer"
-                });
-                serde_json::to_vec_pretty(&minimal_config)
-                    .map_err(|e| EmbedError::External { source: e.into() })?
+                // Create a minimal tokenizer config with tokens from special_tokens_map
+                self.create_minimal_tokenizer_config(&special_tokens_map_file)?
             }
         } else {
-            // Create a minimal tokenizer config
-            let minimal_config = serde_json::json!({
-                "clean_up_tokenization_spaces": true,
-                "do_lower_case": false,
-                "model_max_length": 512,
-                "tokenizer_class": "BertTokenizer"
-            });
-            serde_json::to_vec_pretty(&minimal_config)
-                .map_err(|e| EmbedError::External { source: e.into() })?
+            // Create a minimal tokenizer config with tokens from special_tokens_map
+            self.create_minimal_tokenizer_config(&special_tokens_map_file)?
         };
 
         // Create the tokenizer files struct
