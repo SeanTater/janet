@@ -22,7 +22,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.85.0
+      uses: dtolnay/rust-toolchain@1.100.0
       with:
         components: rustfmt, clippy
 
@@ -83,7 +83,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.85.0
+      uses: dtolnay/rust-toolchain@1.100.0
 
     - name: Cache dependencies
       uses: actions/cache@v4
@@ -120,7 +120,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.85.0
+      uses: dtolnay/rust-toolchain@1.100.0
 
     - name: Install GTK dependencies
       run: |
