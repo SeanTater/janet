@@ -36,7 +36,7 @@ serde_json = "1.0"
 # - "postgres": PostgreSQL support (if needed later)
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "chrono", "migrate"] }
 tempfile = "3.19.1"
-tokio = { version = "1.44.1", features = ["full"] }
+tokio = { version = "1.47.1", features = ["full"] }
 tokio-stream = "0.1.17"
 toml = "0.8.20"
 tracing = "0.1.41"
