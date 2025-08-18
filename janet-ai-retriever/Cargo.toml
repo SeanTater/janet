@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.97"
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 blake3 = "1.7.0"
 bytemuck = "1.23.2"
 chrono = { version = "0.4.38", features = ["serde"] }
