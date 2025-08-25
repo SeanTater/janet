@@ -35,7 +35,7 @@ serde_json = "1.0"
 # - "any": Runtime database driver switching
 # - "postgres": PostgreSQL support (if needed later)
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "chrono", "migrate"] }
-tempfile = "3.19.1"
+tempfile = "3.21.0"
 tokio = { version = "1.44.1", features = ["full"] }
 tokio-stream = "0.1.17"
 toml = "0.9"
