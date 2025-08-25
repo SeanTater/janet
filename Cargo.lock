@@ -946,9 +946,9 @@ dependencies = [
 
 [[package]]
 name = "fastembed"
-version = "5.0.2"
+version = "5.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e80f1228af29d72b85f2be510aba2d98cf4f214f9b4994db42af6965bc88d74a"
+checksum = "7b6ea4eee3e41add51440698fdde1b4afe83241e73fa90c29462a0460d69bcec"
 dependencies = [
  "anyhow",
  "hf-hub",
@@ -3369,7 +3369,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.14",
  "tokio",
  "tokio-util",
  "tracing",
@@ -4095,7 +4095,7 @@ dependencies = [
  "cfg-expr 0.15.8",
  "heck",
  "pkg-config",
- "toml",
+ "toml 0.8.23",
  "version-compare",
 ]
 
