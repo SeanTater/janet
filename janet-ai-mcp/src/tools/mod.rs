@@ -4,4 +4,3 @@
 //! that integrate with janet-ai-retriever, janet-ai-context, and janet-ai-embed.
 
 pub mod regex_search;
-pub mod semantic_search;

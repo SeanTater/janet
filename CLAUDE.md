@@ -1,5 +1,12 @@
 # CLAUDE.md
 
+NOTE: Embedding-based runtime features have been removed from the MCP runtime.
+This file remains as a development aid and reference. Embedding integration is
+available in the archived `janet-ai-embed` crate, but the runtime focuses on
+text-based indexing and search.
+
+# CLAUDE.md
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Commands
@@ -48,16 +55,16 @@ Text chunking library for RAG systems
 - **TextContextBuilder**: Configurable text chunking with delimiters and size limits
 - **CLI tool**: `janet-ai-context-cli` for processing files into JSON chunks
 
-### janet-ai-embed
-High-performance embedding generation library
-- **FastEmbed Integration**: Multiple transformer models (BGE, E5, ModernBERT)
-- **Async Processing**: Full async/await support with automatic model caching
-- **Provider Pattern**: Extensible trait-based design
+### janet-ai-embed (deprecated for MCP runtime)
+High-performance embedding generation library. Note: `janet-ai-mcp` no longer depends on
+`janet-ai-embed` for its runtime. Embedding generation remains available in the workspace for
+experimentation and for the `janet-ai-retriever` indexing pipeline, but MCP's simplified server
+focuses on `regex_search` and lightweight status reporting.
 
 ### janet-ai-retriever
 Complete indexing and search system
 - **IndexingEngine**: File discovery, chunking, and embedding generation
-- **SQLite Storage**: Text search and vector similarity (cosine) search using f16 embeddings
+- **SQLite Storage**: Text search and vector similarity (cosine) search (archived embedding support)
 - **File Watching**: Real-time monitoring with debouncing and graceful degradation
 - **CLI Interface**: Database management and search tools
 
@@ -77,7 +84,7 @@ MCP (Model Context Protocol) server for AI integration
 ### Development Philosophy
 - **Local-first**: Prefer SQLite over Pinecone, Ollama over OpenAI APIs
 - **Testing**: Use tracing (not log), focus on happy paths first, use "sans io" patterns
-- **Performance**: f16 embeddings for memory efficiency, async-first architecture
+- **Performance**: (archived) f16 embeddings for memory efficiency, async-first architecture
 
 ### Documentation Standards
 - **Module-level docs**: Comprehensive documentation with architecture, key components, usage examples
@@ -111,7 +118,7 @@ MCP (Model Context Protocol) server for AI integration
 - **MCP protocol**: Tests require process spawning and stdio communication
 
 #### Performance
-- **Large embeddings**: Use f16 instead of f32 for memory efficiency
+- **Large embeddings**: f16 (archived) can be used instead of f32 for memory efficiency
 - **File watching**: Debounce file events, graceful degradation on errors
 - **Async coordination**: Task queues with priority and retry logic
 

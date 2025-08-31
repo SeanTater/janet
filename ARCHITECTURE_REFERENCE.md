@@ -1,3 +1,10 @@
+# NOTE: Embedding-based runtime features have been removed
+
+This document remains as an architecture reference for historical/archival
+purposes. The MCP runtime no longer includes embedding-based semantic search
+by default; the system now focuses on text-based indexing. Embedding
+integration is available in the archived `janet-ai-embed` crate.
+
 # ChunkHound Architecture Reference
 ## Comprehensive Guide for Agentic Code Development Inspiration
 
@@ -9,7 +16,7 @@ ChunkHound is a sophisticated **Model Context Protocol (MCP) Server** that provi
 
 - **MCP-First Design**: Built specifically for AI assistant integration
 - **Real-Time File Monitoring**: Sophisticated file watching with debouncing and priority handling
-- **Multi-Modal Search**: Combines semantic embeddings, regex patterns, and fuzzy matching
+-- **Multi-Modal Search (reference)**: Combines semantic embeddings, regex patterns, and fuzzy matching. Note: the reference describes a full multi-modal architecture — the janet-ai MCP server in this repository has been simplified and no longer includes embedding-based semantic search by default.
 - **Pluggable Architecture**: Clean abstractions for databases, embeddings, and parsers
 - **Production-Ready**: Comprehensive error handling, logging, and performance optimization
 
