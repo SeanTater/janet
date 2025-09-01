@@ -4,7 +4,7 @@
 use crate::ServerConfig;
 use crate::tools::{self, regex_search::RegexSearchRequest};
 use anyhow::Result;
-use rmcp::handler::server::tool::Parameters;
+use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{Implementation, ProtocolVersion, ServerCapabilities};
 use rmcp::{
     ErrorData as McpError, ServerHandler, ServiceExt,
