@@ -11,12 +11,9 @@ use std::process::Stdio;
 //
 // For reliable testing, prefer the unit tests in src/ modules.
 
-#[cfg(test)]
-use std::path::PathBuf;
 use tempfile::tempdir;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
-use tokio::time::{Duration, timeout};
+use tokio::time::Duration;
 
 /// Test that basic file system operations work
 #[test]
@@ -83,43 +80,4 @@ async fn test_server_kill() {
 
     // Just check that we could start and kill the process
     assert!(kill_result.is_ok() || wait_result.is_ok());
-}
-
-/// Test actual MCP protocol communication over stdio
-#[tokio::test]
-#[ignore] // Flaky due to process spawning, stdio communication, and timing dependencies
-async fn test_mcp_initialize() {
-    // Test removed due to aggressive simplification. Original test exercised
-    // MCP initialize over stdio and required the indexing/database to be present.
-    // Leaving a no-op placeholder here to preserve test structure.
-}
-
-/// Test end-to-end semantic search with real test data
-#[tokio::test]
-#[ignore] // Very flaky - requires full indexing, embeddings, model downloading, process management, and stdio communication
-async fn test_semantic_search_with_real_data() {
-    // Test removed due to the removal of semantic search and indexing features.
-}
-
-/// Helper function to recursively copy directories
-fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
-    use std::fs;
-
-    fs::create_dir_all(dst)?;
-
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if ty.is_dir() {
-            copy_dir_all(&src_path, &dst_path)?;
-        } else {
-            fs::copy(&src_path, &dst_path)?;
-        }
-    }
-
-    Ok(())
 }
