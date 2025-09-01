@@ -1,9 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "janet-ai-retriever",
-    "janet-ai-context",
-    "janet-ai-embed",
     "janet-ai-mcp",
     "janet-ai-gtk",
 ]

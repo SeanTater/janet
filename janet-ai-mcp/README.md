@@ -1,21 +1,26 @@
+# NOTE: Embedding-based runtime features have been removed from the MCP runtime.
+# This document is retained for reference; embedding integration is available in the archived  crate.
+
 # janet-ai-mcp
 
-A **Model Context Protocol (MCP) Server** that provides semantic and regex search capabilities across codebases. Built for integration with AI assistants and code analysis tools, janet-ai-mcp leverages the Janet AI ecosystem to deliver powerful code search functionality through a standardized MCP interface.
+A simplified Model Context Protocol (MCP) Server focused on fast, local code searches.
 
-## Overview
+Note: The embedding-based `semantic_search` and related indexing features have been removed
+from this crate to reduce complexity. The MCP server now focuses on lightweight, reliable
+tools that work without a pre-built index.
 
-janet-ai-mcp serves as a bridge between AI assistants and the Janet AI codebase analysis tools, providing four core search commands through the MCP protocol:
+Overview
 
-- **`status`**: Database statistics and provider information
-- **`regex_search`**: Pattern-based file content search with intelligent filtering
-- **`semantic_search`**: Embedding-based similarity search for natural language queries
-- **`delegate_search`**: Advanced search combining embeddings with LLM validation (planned)
+janet-ai-mcp provides a small set of MCP tools aimed at fast on-disk search:
+
+- **`status`**: Basic server and configuration information
+- **`regex_search`**: Pattern-based file content search with filtering and context
 
 ## Features
 
 ### 🔍 **Multi-Modal Search**
 - **Regex Search**: Fast pattern matching across project files with gitignore support
-- **Semantic Search**: Vector similarity search using f16 embeddings for natural language queries
+- **Semantic Search**: Vector similarity search (archived f16 embeddings support)
 - **Configurable Filtering**: File type filters, dependency inclusion, documentation inclusion
 
 ### 🗄️ **Real Database Integration**
@@ -59,7 +64,7 @@ janet-ai-mcp serves as a bridge between AI assistants and the Janet AI codebase 
 │  │               │                  │                         │ │
 │  │ • FastEmbed   │ • FileIndex      │ • Text Chunking         │ │
 │  │ • Providers   │ • SQLite Store   │ • Metadata Tracking     │ │
-│  │ • f16 Vectors │ • Async DB Ops   │ • Content Parsing       │ │
+│  │ • f16 (archived) Vectors │ • Async DB Ops   │ • Content Parsing       │ │
 │  └───────────────┴──────────────────┴─────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -146,7 +151,7 @@ delegate_search({
 
 #### Semantic Search Tool
 - **Embedding Integration**: Full integration with janet-ai-embed FastEmbedProvider
-- **Vector Similarity**: Custom cosine similarity implementation for f16 vectors
+- **Vector Similarity**: Custom cosine similarity implementation (archived f16 vectors)
 - **Threshold Filtering**: Configurable similarity thresholds
 - **Database Queries**: Efficient retrieval of chunks with embeddings
 - **Error Handling**: Graceful fallback when embeddings unavailable

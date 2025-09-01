@@ -1,31 +1,25 @@
 use gtk4::prelude::*;
-use janet_ai_mcp::{
-    ServerConfig,
-    tools::{regex_search::RegexSearchRequest, semantic_search::SemanticSearchRequest},
-};
+use janet_ai_mcp::{ServerConfig, tools::regex_search::RegexSearchRequest};
 use relm4::prelude::*;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub enum SearchType {
     Regex,
-    Semantic,
 }
 
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
     pub content: String,
     pub is_user: bool,
-    pub search_type: Option<SearchType>,
     pub timestamp: String,
 }
 
 impl ChatMessage {
-    pub fn new_user(content: String, search_type: SearchType) -> Self {
+    pub fn new_user(content: String) -> Self {
         Self {
             content,
             is_user: true,
-            search_type: Some(search_type),
             timestamp: chrono::Local::now().format("%H:%M").to_string(),
         }
     }
@@ -34,7 +28,6 @@ impl ChatMessage {
         Self {
             content,
             is_user: false,
-            search_type: None,
             timestamp: chrono::Local::now().format("%H:%M").to_string(),
         }
     }
@@ -65,8 +58,7 @@ impl App {
         let input = input.trim();
         match input {
             s if s.starts_with("/regex ") => (SearchType::Regex, s[7..].to_string()),
-            s if s.starts_with("/semantic ") => (SearchType::Semantic, s[10..].to_string()),
-            _ => (SearchType::Semantic, input.to_string()),
+            _ => (SearchType::Regex, input.to_string()),
         }
     }
 
@@ -107,20 +99,7 @@ impl App {
         }
 
         let meta_text = if message.is_user {
-            message
-                .search_type
-                .as_ref()
-                .map(|st| {
-                    format!(
-                        "{} • {}",
-                        message.timestamp,
-                        match st {
-                            SearchType::Regex => "regex",
-                            SearchType::Semantic => "semantic",
-                        }
-                    )
-                })
-                .unwrap_or_else(|| message.timestamp.clone())
+            format!("{} • regex", message.timestamp)
         } else {
             message.timestamp.clone()
         };
@@ -140,28 +119,16 @@ impl App {
     /// Execute search request based on type
     async fn execute_search(
         config: &ServerConfig,
-        search_type: SearchType,
+        _search_type: SearchType,
         query: String,
     ) -> Result<String, String> {
-        match search_type {
-            SearchType::Regex => {
-                let req = RegexSearchRequest {
-                    pattern: query,
-                    globs: None,
-                    include_deps: None,
-                    include_docs: None,
-                };
-                janet_ai_mcp::tools::regex_search::regex_search(config, req).await
-            }
-            SearchType::Semantic => {
-                let req = SemanticSearchRequest {
-                    query,
-                    limit: Some(20),
-                    threshold: None,
-                };
-                janet_ai_mcp::tools::semantic_search::semantic_search(config, req).await
-            }
-        }
+        let req = RegexSearchRequest {
+            pattern: query,
+            globs: None,
+            include_deps: None,
+            include_docs: None,
+        };
+        janet_ai_mcp::tools::regex_search::regex_search(config, req).await
     }
 
     /// Scroll the chat to the bottom
@@ -349,7 +316,7 @@ impl SimpleComponent for App {
             AppMsg::SendMessage(input) => {
                 if let Some(config) = &self.server_config {
                     let (search_type, query) = Self::parse_command(&input);
-                    let user_message = ChatMessage::new_user(input, search_type.clone());
+                    let user_message = ChatMessage::new_user(input);
                     self.messages.push(user_message.clone());
 
                     Self::add_message_and_scroll(

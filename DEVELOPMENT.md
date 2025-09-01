@@ -1,3 +1,6 @@
+# NOTE: Embedding-based runtime features have been removed from the MCP runtime.
+# This document is retained for reference; embedding integration is available in the archived  crate.
+
 # Development Guide
 
 This document outlines the development workflow and best practices for the Janet AI project.
