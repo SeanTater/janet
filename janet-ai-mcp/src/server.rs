@@ -101,9 +101,6 @@ impl JanetMcpServer {
         }
     }
 
-    /// Semantic search tool - search using embeddings
-    // semantic_search removed as part of simplification
-
     /// Serve the MCP server using stdio transport
     /// Start serving MCP requests over stdio transport.
     ///
@@ -148,8 +145,3 @@ impl ServerHandler for JanetMcpServer {
         }
     }
 }
-
-// Server unit tests that assumed indexing/DB are removed as part of the
-// aggressive simplification to focus MCP server on regex search. See
-// REMOVAL_CHECKLIST.md for the follow-up tasks to remove the remaining
-// embedding/indexing code and make status optional.
