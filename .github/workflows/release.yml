@@ -38,14 +38,6 @@ jobs:
           This release includes the latest features and bug fixes.
           See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for detailed changes.
 
-          ## Installation
-
-          ### Using Cargo
-          ```bash
-          cargo install janet-ai-context --version ${{ steps.get-version.outputs.version }}
-          cargo install janet-ai-retriever --version ${{ steps.get-version.outputs.version }}
-          ```
-
           ### Download Binaries
           Download the appropriate binary for your platform from the assets below.
         draft: false
