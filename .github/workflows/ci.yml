@@ -32,17 +32,19 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libgtk-4-dev
 
-    - name: Cache dependencies
-      uses: actions/cache@v4
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-stable-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-stable-
-          ${{ runner.os }}-cargo-
+        shared-key: "janet-ai-${{ matrix.os }}"
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.6
+
+    - name: Configure sccache
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
 
     - name: Check formatting
       run: cargo fmt --all -- --check
@@ -72,10 +74,6 @@ jobs:
       if: matrix.os != 'ubuntu-latest'
       run: cargo test --workspace --exclude janet-ai-gtk --verbose --all-features
 
-    - name: Build documentation
-      run: cargo doc --no-deps --all-features
-      if: matrix.os == 'ubuntu-latest'
-
   security-audit:
     name: Security audit
     runs-on: ubuntu-latest
@@ -85,14 +83,11 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@1.85.0
 
-    - name: Cache dependencies
-      uses: actions/cache@v4
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
+        shared-key: "janet-ai-audit"
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Cache cargo-audit binary
       uses: actions/cache@v4
@@ -127,14 +122,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libgtk-4-dev
 
-    - name: Cache dependencies
-      uses: actions/cache@v4
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-workspace-${{ hashFiles('**/Cargo.lock') }}
+        shared-key: "janet-ai-workspace"
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Check workspace dependencies
       run: |
