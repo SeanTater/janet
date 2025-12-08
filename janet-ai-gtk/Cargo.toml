@@ -15,5 +15,5 @@ gtk4 = "0.9"
 janet-ai-mcp = { path = "../janet-ai-mcp" }
 relm4 = "0.9"
 tokio = { version = "1.44.1", features = ["full"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["fmt"] }
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3.22", features = ["fmt"] }
