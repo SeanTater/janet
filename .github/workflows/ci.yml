@@ -33,7 +33,7 @@ jobs:
         sudo apt-get install -y libgtk-4-dev
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
@@ -86,7 +86,7 @@ jobs:
       uses: dtolnay/rust-toolchain@1.85.0
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
@@ -95,7 +95,7 @@ jobs:
         key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Cache cargo-audit binary
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cargo/bin/cargo-audit
         key: ${{ runner.os }}-cargo-audit-bin
@@ -128,7 +128,7 @@ jobs:
         sudo apt-get install -y libgtk-4-dev
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
