@@ -16,7 +16,7 @@ futures = "0.3.31"
 glob = "0.3.1"
 ignore = "0.4.23"
 regex = "1.11.1"
-rmcp = "0.6"
+rmcp = "0.12"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.44.1", features = ["full"] }
